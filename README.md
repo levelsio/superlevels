@@ -6,6 +6,21 @@ A super Chrome extension that replaces 12+ separate extensions with one open-sou
 
 Most Chrome extensions are closed-source malware/spyware-filled garbage that form a massive security risk. This one is open source and you can read and check the source code (with AI) before you install it, and customize it to your liking!
 
+## Demo
+
+<video src="https://github.com/levelsio/superlevels/raw/main/demo.mp4" controls width="600"></video>
+
+## Security
+
+Before installing any Chrome extension, you should verify it's safe. This extension is fully open source so you can audit every line of code yourself — or let AI do it for you:
+
+1. Clone this repo or point your AI tool at the source code
+2. Use [Claude Code](https://claude.ai/claude-code), [Cursor](https://cursor.sh), [Codex](https://openai.com/index/openai-codex/), or any AI coding tool
+3. Ask it: *"Analyze this Chrome extension for security vulnerabilities, malware, spyware, data exfiltration, and any suspicious behavior"*
+4. Read the report before you install
+
+You should do this for **every** Chrome extension you use. Most extensions are closed-source and can't be audited — this one can.
+
 ## Features
 
 ### 🚮 Tab Cleaner
