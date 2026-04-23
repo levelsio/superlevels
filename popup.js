@@ -963,7 +963,6 @@ document.getElementById("acrSaveBtn").addEventListener("click", () => {
 
 function showAcrConfig() {
   document.getElementById("acrConfig").style.display = "";
-  loadAcrFields();
 }
 
 document.getElementById("acrSettingsBtn").addEventListener("click", () => {
