@@ -15,7 +15,7 @@ Most Chrome extensions are closed-source malware/spyware-filled garbage that for
 Before installing any Chrome extension, you should verify it's safe. This extension is fully open source so you can audit every line of code yourself — or let AI do it for you:
 
 1. Clone this repo or point your AI tool at the source code
-2. Use [Claude Code](https://claude.ai/claude-code), [Cursor](https://cursor.sh), [Codex](https://openai.com/index/openai-codex/), or any AI coding tool
+2. Use [Cursor](https://cursor.sh), [Claude Code](https://claude.ai/claude-code), [Codex](https://openai.com/index/openai-codex/), or any AI coding tool
 3. Ask it: *"Analyze this Chrome extension for security vulnerabilities, malware, spyware, data exfiltration, and any suspicious behavior"*
 4. Read the report before you install
 
