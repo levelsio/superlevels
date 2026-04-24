@@ -1,6 +1,20 @@
 (() => {
   const STYLE_ID = "superlevels-darkmode";
 
+  // Sites where the full-page `filter: invert(...)` approach creates so many
+  // GPU compositing layers that the tab runs out of memory and crashes.
+  // The re-invert rule matches every thumbnail with `[style*="background-image"]`
+  // plus every `<video>` and `<iframe>`, which is lethal on video-heavy pages.
+  const DARKMODE_BLOCKLIST = [
+    "youtube.com",
+    "youtube-nocookie.com",
+    "twitch.tv",
+  ];
+  const host = location.hostname;
+  if (DARKMODE_BLOCKLIST.some((d) => host === d || host.endsWith("." + d))) {
+    return;
+  }
+
   // CSS approach: invert the whole page, then re-invert media so images/videos look normal
   function buildCSS(brightness) {
     const b = brightness / 100;
@@ -45,8 +59,7 @@
     }
   }
 
-  // Get hostname for per-site storage
-  const host = location.hostname;
+  // Per-site storage keys (host is declared at the top for blocklist check).
   const storageKey = "darkmode_" + host;
   const globalKey = "darkmode_global";
 
