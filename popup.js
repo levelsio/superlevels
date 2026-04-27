@@ -93,6 +93,103 @@ function renderExclusionList(exclusions) {
   });
 }
 
+// ── Tab Group Exclusions ──
+const excludeAllGroupsEl = document.getElementById("excludeAllGroups");
+const groupListEl = document.getElementById("groupList");
+
+const GROUP_COLOR_HEX = {
+  grey: "#5f6368",
+  blue: "#1a73e8",
+  red: "#d93025",
+  yellow: "#f9ab00",
+  green: "#1e8e3e",
+  pink: "#d01884",
+  purple: "#a142f4",
+  cyan: "#007b83",
+  orange: "#fa903e",
+};
+
+chrome.storage.local.get(["excludeAllGroups", "excludedGroupTitles"], (data) => {
+  excludeAllGroupsEl.checked = !!data.excludeAllGroups;
+  applyDimmed();
+  renderGroupList(data.excludedGroupTitles || []);
+});
+
+function refreshGroupList() {
+  chrome.storage.local.get(["excludedGroupTitles"], (data) => {
+    renderGroupList(data.excludedGroupTitles || []);
+  });
+}
+
+if (chrome.tabGroups) {
+  chrome.tabGroups.onCreated.addListener(refreshGroupList);
+  chrome.tabGroups.onUpdated.addListener(refreshGroupList);
+  chrome.tabGroups.onRemoved.addListener(refreshGroupList);
+}
+
+excludeAllGroupsEl.addEventListener("change", () => {
+  chrome.storage.local.set({ excludeAllGroups: excludeAllGroupsEl.checked }, applyDimmed);
+});
+
+function applyDimmed() {
+  groupListEl.classList.toggle("dimmed", excludeAllGroupsEl.checked);
+}
+
+async function renderGroupList(excluded) {
+  let visible = [];
+  try {
+    if (chrome.tabGroups && chrome.tabGroups.query) {
+      visible = await chrome.tabGroups.query({});
+    }
+  } catch {}
+
+  // Only titled groups can be excluded individually; the global toggle catches untitled ones.
+  const visibleTitled = visible.filter((g) => g.title && g.title.trim());
+  const visibleTitles = new Set(visibleTitled.map((g) => g.title));
+  const orphans = excluded.filter((t) => t && !visibleTitles.has(t));
+  const hasUntitled = visible.some((g) => !g.title || !g.title.trim());
+
+  if (!visibleTitled.length && !orphans.length) {
+    let msg = "No tab groups found";
+    if (hasUntitled) msg += " — name your groups to exclude individually";
+    groupListEl.innerHTML = `<div class="empty">${msg}</div>`;
+    return;
+  }
+
+  const renderRow = (title, color, isExcluded) => `<div class="item group-item">
+    <div class="group-info">
+      <span class="group-color" style="background:${color}"></span>
+      <span class="group-title">${esc(title)}</span>
+    </div>
+    <label class="switch">
+      <input type="checkbox" data-title="${escA(title)}"${isExcluded ? " checked" : ""}>
+      <span class="slider"></span>
+    </label>
+  </div>`;
+
+  const visibleHtml = visibleTitled
+    .map((g) => renderRow(g.title, GROUP_COLOR_HEX[g.color] || "#888", excluded.includes(g.title)))
+    .join("");
+  const orphanHtml = orphans.map((t) => renderRow(t, "#444", true)).join("");
+
+  groupListEl.innerHTML = visibleHtml + orphanHtml;
+
+  groupListEl.querySelectorAll('input[type="checkbox"][data-title]').forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const title = cb.dataset.title;
+      chrome.storage.local.get(["excludedGroupTitles"], (data) => {
+        let list = data.excludedGroupTitles || [];
+        if (cb.checked) {
+          if (!list.includes(title)) list = [...list, title];
+        } else {
+          list = list.filter((t) => t !== title);
+        }
+        chrome.storage.local.set({ excludedGroupTitles: list }, () => renderGroupList(list));
+      });
+    });
+  });
+}
+
 // ── Closed Tabs History ──
 const closedSection = document.getElementById("closedSection");
 
