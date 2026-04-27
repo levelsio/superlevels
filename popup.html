@@ -123,6 +123,27 @@
       font-size: 16px; cursor: pointer; padding: 0 4px; line-height: 1;
     }
     .exc-list .item button:hover { color: #ff6b81; }
+    .exc-list + h2 { margin-top: 14px; }
+    .group-list.dimmed { opacity: 0.5; pointer-events: none; }
+    .group-list .group-info {
+      display: flex; align-items: center; gap: 8px;
+      flex: 1; min-width: 0;
+    }
+    .group-list .group-color {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+    .group-list .group-title {
+      flex: 1; min-width: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .group-list .group-title.untitled { color: #666; font-style: italic; }
+    .group-list .item { padding: 5px 10px; }
+    .group-list .switch { width: 32px; height: 18px; flex-shrink: 0; }
+    .group-list .slider { border-radius: 18px; }
+    .group-list .slider::before {
+      width: 12px; height: 12px; left: 3px; bottom: 3px;
+    }
+    .group-list .switch input:checked + .slider::before { transform: translateX(14px); }
     .closed-section { margin-top: 14px; }
     .closed-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -766,6 +787,15 @@
         <button id="addBtn">Add</button>
       </div>
       <div class="exc-list" id="list"></div>
+      <h2>Excluded Tab Groups</h2>
+      <div class="toggle-row">
+        <label>Exclude all tab groups</label>
+        <label class="switch">
+          <input type="checkbox" id="excludeAllGroups">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="exc-list group-list" id="groupList"></div>
       <div class="closed-section" id="closedSection"></div>
     </div>
   </div>
