@@ -11,35 +11,40 @@
       background: #1a1a2e;
       color: #e0e0e0;
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
       overflow: hidden;
     }
 
-    /* ── Top nav ── */
+    /* ── Side nav ── */
     .nav {
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
+      width: 110px;
       background: #0f0f23;
-      border-bottom: 1px solid #2a2a4a;
+      border-right: 1px solid #2a2a4a;
       flex-shrink: 0;
+      overflow-y: auto;
     }
+    .nav::-webkit-scrollbar { width: 4px; }
+    .nav::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
     .nav button {
-      width: calc(100% / 7);
-      padding: 9px 2px;
+      width: 100%;
+      padding: 9px 8px;
       background: none;
       border: none;
       color: #888;
       font-size: 11px;
       font-weight: 600;
       cursor: pointer;
-      border-bottom: 2px solid transparent;
+      border-left: 2px solid transparent;
       transition: all 0.2s;
+      text-align: left;
     }
     .nav button:hover { color: #ccc; }
     .nav button:focus { outline: none; }
     .nav button.active {
       color: #e94560;
-      border-bottom-color: #e94560;
+      border-left-color: #e94560;
     }
 
     /* ── Pages ── */
@@ -738,7 +743,7 @@
     <button data-page="xdim">𝕏 Dim</button>
     <button data-page="xunhook">𝕏 Unhook</button>
     <button data-page="jstoggle">⚡ JS</button>
-    <button data-page="nocookie">🚫 GDPR</button>
+    <button data-page="nocookie">🚫 Cookies=OK</button>
     <button data-page="livecss">🎨 CSS</button>
     <button data-page="unhook">📺 YT Unhook</button>
     <button data-page="music">🎵 Music</button>
