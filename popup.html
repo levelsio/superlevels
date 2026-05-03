@@ -159,6 +159,52 @@
       color: #555; font-size: 12px; text-align: center; padding: 12px;
     }
 
+    /* ── Focus Blocker ── */
+    .focus-note {
+      font-size: 11px; color: #666;
+      margin-bottom: 12px; line-height: 1.5;
+    }
+    .focus-note b { color: #aaa; }
+    .focus-chips {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-bottom: 12px;
+    }
+    .focus-chip {
+      padding: 5px 10px; background: #16213e; color: #ccc;
+      border: 1px solid #2a2a4a; border-radius: 12px;
+      font-size: 11px; cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .focus-chip:hover { background: #1b2a4a; border-color: #e94560; color: #fff; }
+    .focus-chip.added { opacity: 0.35; cursor: default; }
+    .focus-chip.added:hover { background: #16213e; border-color: #2a2a4a; color: #ccc; }
+    .focus-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px; background: #16213e;
+      border-radius: 6px; margin-bottom: 4px; font-size: 13px;
+    }
+    .focus-item .host { flex: 1; word-break: break-all; }
+    .switch-sm { position: relative; width: 30px; height: 16px; flex-shrink: 0; }
+    .switch-sm input { opacity: 0; width: 0; height: 0; }
+    .slider-sm {
+      position: absolute; inset: 0;
+      background: #444; border-radius: 16px;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .slider-sm::before {
+      content: ''; position: absolute;
+      width: 12px; height: 12px; left: 2px; bottom: 2px;
+      background: #fff; border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .switch-sm input:checked + .slider-sm { background: #e94560; }
+    .switch-sm input:checked + .slider-sm::before { transform: translateX(14px); }
+    .focus-item button.del {
+      background: none; border: none; color: #e94560;
+      font-size: 16px; cursor: pointer; padding: 0 4px; line-height: 1;
+    }
+    .focus-item button.del:hover { color: #ff6b81; }
+
     /* ── Cookie Editor ── */
     .cookie-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -732,6 +778,7 @@
   <!-- Nav -->
   <div class="nav">
     <button class="active" data-page="tabcleaner">🚮 Tabs</button>
+    <button data-page="focus">🎯 Focus</button>
     <button data-page="cookies">🍪 Cookies</button>
     <button data-page="redirects">🔀 Redirects</button>
     <button data-page="darkmode">🌙 Dark</button>
@@ -768,6 +815,30 @@
       </div>
       <div class="exc-list" id="list"></div>
       <div class="closed-section" id="closedSection"></div>
+    </div>
+  </div>
+
+  <!-- ═══ Focus Blocker Page ═══ -->
+  <div class="page" id="page-focus">
+    <div class="page-body">
+      <div class="toggle-row">
+        <label>Focus mode</label>
+        <label class="switch">
+          <input type="checkbox" id="focusEnabled">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="focus-note">
+        When focus mode is on, listed sites redirect to a block page. Suffix-matched: <b>x.com</b> also blocks <b>mobile.x.com</b>.
+      </div>
+      <h2>Quick add</h2>
+      <div class="focus-chips" id="focusChips"></div>
+      <h2>Blocked sites</h2>
+      <div class="add-row">
+        <input type="text" id="focusHostInput" placeholder="e.g. reddit.com">
+        <button id="focusAddBtn">Add</button>
+      </div>
+      <div id="focusList"></div>
     </div>
   </div>
 

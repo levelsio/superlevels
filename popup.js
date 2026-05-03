@@ -1126,6 +1126,116 @@ jsonformatToggle.addEventListener("change", async () => {
 });
 
 // ═══════════════════════════════════
+//  Focus Blocker
+// ═══════════════════════════════════
+const focusEnabledEl = document.getElementById("focusEnabled");
+const focusHostInput = document.getElementById("focusHostInput");
+const focusAddBtn = document.getElementById("focusAddBtn");
+const focusListEl = document.getElementById("focusList");
+const focusChipsEl = document.getElementById("focusChips");
+
+const FOCUS_QUICK_ADD = [
+  "x.com",
+  "twitter.com",
+  "reddit.com",
+  "facebook.com",
+  "instagram.com",
+  "youtube.com",
+  "tiktok.com",
+  "news.ycombinator.com",
+];
+
+chrome.storage.local.get(["focus_enabled", "focus_sites"], (data) => {
+  focusEnabledEl.checked = !!data.focus_enabled;
+  renderFocusList(data.focus_sites || []);
+});
+
+focusEnabledEl.addEventListener("change", () => {
+  chrome.storage.local.set({ focus_enabled: focusEnabledEl.checked });
+});
+
+function normalizeFocusHost(s) {
+  return String(s || "").trim().toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/.*$/, "");
+}
+
+function addFocusSite(rawHost) {
+  const host = normalizeFocusHost(rawHost);
+  if (!host) return;
+  chrome.storage.local.get(["focus_sites"], (data) => {
+    const sites = data.focus_sites || [];
+    if (sites.some((s) => s.host === host)) {
+      focusHostInput.value = "";
+      return;
+    }
+    sites.push({ host, on: true });
+    chrome.storage.local.set({ focus_sites: sites }, () => {
+      focusHostInput.value = "";
+      renderFocusList(sites);
+    });
+  });
+}
+
+focusAddBtn.addEventListener("click", () => addFocusSite(focusHostInput.value));
+focusHostInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") addFocusSite(focusHostInput.value);
+});
+
+function removeFocusSite(host) {
+  chrome.storage.local.get(["focus_sites"], (data) => {
+    const sites = (data.focus_sites || []).filter((s) => s.host !== host);
+    chrome.storage.local.set({ focus_sites: sites }, () => renderFocusList(sites));
+  });
+}
+
+function toggleFocusSite(host, on) {
+  chrome.storage.local.get(["focus_sites"], (data) => {
+    const sites = (data.focus_sites || []).map((s) =>
+      s.host === host ? { host: s.host, on } : s
+    );
+    chrome.storage.local.set({ focus_sites: sites });
+  });
+}
+
+function renderFocusList(sites) {
+  const existing = new Set(sites.map((s) => s.host));
+  focusChipsEl.innerHTML = FOCUS_QUICK_ADD.map((h) => {
+    const cls = existing.has(h) ? "focus-chip added" : "focus-chip";
+    return `<span class="${cls}" data-host="${escA(h)}">+ ${esc(h)}</span>`;
+  }).join("");
+  focusChipsEl.querySelectorAll(".focus-chip").forEach((el) => {
+    if (el.classList.contains("added")) return;
+    el.addEventListener("click", () => addFocusSite(el.dataset.host));
+  });
+
+  if (!sites.length) {
+    focusListEl.innerHTML = '<div class="empty">No sites blocked yet — add one above</div>';
+    return;
+  }
+  focusListEl.innerHTML = sites
+    .map(
+      (s) => `
+      <div class="focus-item">
+        <span class="host">${esc(s.host)}</span>
+        <label class="switch-sm">
+          <input type="checkbox" ${s.on ? "checked" : ""} data-toggle="${escA(s.host)}">
+          <span class="slider-sm"></span>
+        </label>
+        <button class="del" data-del="${escA(s.host)}" title="Remove">&times;</button>
+      </div>`
+    )
+    .join("");
+  focusListEl.querySelectorAll("input[data-toggle]").forEach((cb) => {
+    cb.addEventListener("change", () => toggleFocusSite(cb.dataset.toggle, cb.checked));
+  });
+  focusListEl.querySelectorAll("button[data-del]").forEach((btn) => {
+    btn.addEventListener("click", () => removeFocusSite(btn.dataset.del));
+  });
+}
+
+// ═══════════════════════════════════
 //  Helpers
 // ═══════════════════════════════════
 function esc(s) {
