@@ -30,6 +30,9 @@ You should do this for **every** Chrome extension you use. Most extensions are c
 ### 🚮 Tab Cleaner
 Automatically closes inactive tabs after a configurable timeout (default: 5 minutes). Set excluded hosts to keep important tabs alive. View and re-open recently closed tabs.
 
+### 🎯 Focus Blocker
+Block distracting sites with one toggle. Add hosts (X, Reddit, Facebook, Instagram, YouTube, TikTok, etc.) and switch focus mode on — visiting them redirects to a "get back to what matters" page. Toggle individual sites on/off without deleting them. Suffix-matched, so `x.com` also blocks `mobile.x.com`.
+
 ### 🍪 Cookie Editor
 Full cookie manager for the current site. View, edit, add, and delete cookies. Export cookies as JSON. Expand any cookie to see and modify all fields including domain, path, SameSite, secure, and httpOnly flags.
 
