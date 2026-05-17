@@ -700,6 +700,24 @@
     .toolbar button:hover { color: #fff; background: rgba(255,255,255,0.04); }
     .toolbar button.danger:hover { color: #e94560; }
 
+    /* ── Headers page ── */
+    .header-scope {
+      font-size: 10px; padding: 2px 7px; border-radius: 4px;
+      font-weight: 600; margin-left: auto; white-space: nowrap; flex-shrink: 0;
+    }
+    .header-scope.site { background: #1e3a5f; color: #4fa3e0; }
+    .header-scope.all { background: #3a1e5f; color: #b07ae0; }
+    .cookie-field select {
+      width: 100%; background: #0f0f23; border: 1px solid #2a2a4a;
+      color: #ccc; padding: 6px 8px; border-radius: 6px; font-size: 13px;
+    }
+    .import-toast {
+      position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%);
+      background: #1a1a2e; border: 1px solid #2a2a4a; color: #aaa;
+      padding: 6px 14px; border-radius: 6px; font-size: 12px;
+      z-index: 200; pointer-events: none;
+    }
+
     /* ── Add cookie modal ── */
     .modal-overlay {
       display: none; position: fixed; inset: 0;
@@ -744,6 +762,7 @@
     <button data-page="music">🎵 Music</button>
     <button data-page="pip">🖼 PiP</button>
     <button data-page="jsonformat">{} JSON</button>
+    <button data-page="headers">&#128272; Headers</button>
   </div>
 
   <!-- ═══ Tab Cleaner Page ═══ -->
@@ -793,11 +812,16 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
         <span>Refresh</span>
       </button>
+      <button id="btnImport" title="Import Cookies from JSON">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Import</span>
+      </button>
       <button id="btnExport" title="Export Cookies">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>
         <span>Export</span>
       </button>
     </div>
+    <input type="file" id="importFileInput" accept=".json" style="display:none">
   </div>
 
   <!-- ═══ Redirect Tracer Page ═══ -->
@@ -1100,6 +1124,27 @@
     </div>
   </div>
 
+  <!-- ═══ Headers Page ═══ -->
+  <div class="page" id="page-headers">
+    <div class="page-body" id="headersBody">
+      <div class="cookie-header">
+        <div class="domain" id="headersDomain">Loading...</div>
+        <div class="count" id="headersCount">0</div>
+      </div>
+      <div id="headersList"></div>
+    </div>
+    <div class="toolbar">
+      <button id="btnAddHeader" title="Add Header Rule">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Add</span>
+      </button>
+      <button id="btnClearHeaders" class="danger" title="Clear All Header Rules">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+        <span>Clear All</span>
+      </button>
+    </div>
+  </div>
+
   <!-- Add Cookie Modal -->
   <div class="modal-overlay" id="addModal">
     <div class="modal">
@@ -1123,6 +1168,39 @@
       <div class="modal-btns">
         <button class="btn-cancel" id="modalCancel">Cancel</button>
         <button class="btn-save" id="modalSave">Add Cookie</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Header Modal -->
+  <div class="modal-overlay" id="addHeaderModal">
+    <div class="modal">
+      <h3>&#128272; Add Header Rule</h3>
+      <div class="cookie-field">
+        <label>Header Name</label>
+        <input type="text" id="newHeaderName" placeholder="e.g. Authorization">
+      </div>
+      <div class="cookie-field">
+        <label>Value</label>
+        <textarea id="newHeaderValue" placeholder="e.g. Bearer my-token"></textarea>
+      </div>
+      <div class="cookie-field">
+        <label>Scope</label>
+        <select id="newHeaderScope">
+          <option value="site">Current site only</option>
+          <option value="all">All sites</option>
+        </select>
+      </div>
+      <div class="cookie-field">
+        <label>Apply to</label>
+        <select id="newHeaderTarget">
+          <option value="request">Request headers (outgoing)</option>
+          <option value="response">Response headers (incoming)</option>
+        </select>
+      </div>
+      <div class="modal-btns">
+        <button class="btn-cancel" id="headerModalCancel">Cancel</button>
+        <button class="btn-save" id="headerModalSave">Add Rule</button>
       </div>
     </div>
   </div>
