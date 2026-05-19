@@ -211,6 +211,51 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
+// ═══════════════════════════════════
+//  Custom Headers (declarativeNetRequest)
+// ═══════════════════════════════════
+const ALL_RESOURCE_TYPES = [
+  "main_frame", "sub_frame", "stylesheet", "script", "image",
+  "font", "object", "xmlhttprequest", "ping", "media", "websocket", "other"
+];
+
+function isValidHeaderRule(r) {
+  if (!r.name || r.value === undefined) return false;
+  if (r.scope === "all") return true;
+  return !!(r.domain || "").replace(/^\./, "");
+}
+
+async function applyHeaderRules() {
+  const { headerRules = [] } = await chrome.storage.local.get("headerRules");
+  const dnrRules = headerRules
+    .filter(isValidHeaderRule)
+    .map((r, i) => {
+      const action = r.target === "response"
+        ? { type: "modifyHeaders", responseHeaders: [{ header: r.name, operation: "set", value: r.value }] }
+        : { type: "modifyHeaders", requestHeaders:  [{ header: r.name, operation: "set", value: r.value }] };
+      const condition = r.scope === "all"
+        ? { resourceTypes: ALL_RESOURCE_TYPES }
+        : { requestDomains: [(r.domain || "").replace(/^\./, "")], resourceTypes: ALL_RESOURCE_TYPES };
+      return { id: i + 1, priority: 1, action, condition };
+    });
+
+  try {
+    const existing = await chrome.declarativeNetRequest.getDynamicRules();
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: existing.map(r => r.id),
+      addRules: dnrRules,
+    });
+  } catch (err) {
+    console.error("[superlevels] Failed to apply header rules:", err);
+  }
+}
+
+applyHeaderRules();
+
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes.headerRules) applyHeaderRules();
+});
+
 // Set defaults on install
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.get(["enabled", "timeoutMin", "exclusions"], (data) => {

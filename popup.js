@@ -19,6 +19,7 @@ function switchToPage(page) {
   if (page === "xunhook") loadXUnhook();
   if (page === "jsonformat") loadJsonFormat();
   if (page === "music") { loadMusicHistory(); loadAcrFields(); }
+  if (page === "headers") loadHeaders();
   chrome.storage.local.set({ last_tab: page });
 }
 
@@ -321,6 +322,47 @@ document.getElementById("btnExport").addEventListener("click", () => {
   a.download = `cookies-${currentDomain}-${Date.now()}.json`;
   a.click();
   URL.revokeObjectURL(url);
+});
+
+// Import
+document.getElementById("btnImport").addEventListener("click", () => {
+  document.getElementById("importFileInput").click();
+});
+
+document.getElementById("importFileInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  let imported = 0, failed = 0;
+  try {
+    const text = await file.text();
+    const cookies = JSON.parse(text);
+    if (!Array.isArray(cookies)) throw new Error("not an array");
+    for (const c of cookies) {
+      try {
+        const protocol = c.secure ? "https" : "http";
+        const domain = (c.domain || "").replace(/^\./, "");
+        const path = c.path || "/";
+        const url = `${protocol}://${domain}${path}`;
+        const details = { url, name: c.name, value: c.value || "", path, secure: !!c.secure, httpOnly: !!c.httpOnly };
+        if (!c.hostOnly && c.domain) details.domain = c.domain;
+        if (c.expirationDate) details.expirationDate = c.expirationDate;
+        if (c.sameSite && c.sameSite !== "unspecified") details.sameSite = c.sameSite;
+        await chrome.cookies.set(details);
+        imported++;
+      } catch { failed++; }
+    }
+  } catch {
+    failed++;
+  }
+  e.target.value = "";
+  loadCookies();
+  const toast = document.createElement("div");
+  toast.className = "import-toast";
+  toast.textContent = failed
+    ? `Imported ${imported}, ${failed} failed`
+    : `Imported ${imported} cookie${imported !== 1 ? "s" : ""}`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
 });
 
 // Add Cookie Modal
@@ -1123,6 +1165,147 @@ jsonformatToggle.addEventListener("change", async () => {
   if (tab) {
     chrome.tabs.sendMessage(tab.id, { type: "jsonformat_toggle", enabled }).catch(() => {});
   }
+});
+
+
+// ═══════════════════════════════════
+//  Headers Manager
+// ═══════════════════════════════════
+let headerRules = [];
+let headersCurrentDomain = "";
+
+const headersListEl = document.getElementById("headersList");
+const headersDomainEl = document.getElementById("headersDomain");
+const headersCountEl = document.getElementById("headersCount");
+
+async function loadHeaders() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab && tab.url) {
+    try { headersCurrentDomain = new URL(tab.url).hostname; } catch { headersCurrentDomain = ""; }
+  }
+  const { headerRules: stored = [] } = await chrome.storage.local.get("headerRules");
+  headerRules = stored;
+  headersDomainEl.textContent = headersCurrentDomain || "unknown";
+  renderHeaders();
+}
+
+function renderHeaders() {
+  headersCountEl.textContent = headerRules.length;
+  if (!headerRules.length) {
+    headersListEl.innerHTML = '<div class="empty">No custom header rules</div>';
+    return;
+  }
+  headersListEl.innerHTML = headerRules.map((r, i) => `
+    <div class="cookie-item" data-hidx="${i}">
+      <div class="cookie-row">
+        <span class="cookie-chevron">&#9660;</span>
+        <span class="cookie-name">${esc(r.name)}</span>
+        <span class="header-scope ${r.scope === "all" ? "all" : "site"}">${r.scope === "all" ? "All Sites" : esc(r.domain || "site")}</span>
+        <button class="cookie-del" data-hdelidx="${i}" title="Delete">&times;</button>
+      </div>
+      <div class="cookie-details">
+        <div class="cookie-field">
+          <label>Header Name</label>
+          <input type="text" value="${escA(r.name)}" data-hfield="name" data-hi="${i}">
+        </div>
+        <div class="cookie-field">
+          <label>Value</label>
+          <textarea data-hfield="value" data-hi="${i}">${esc(r.value || "")}</textarea>
+        </div>
+        <div class="cookie-field">
+          <label>Scope</label>
+          <select data-hfield="scope" data-hi="${i}">
+            <option value="site" ${r.scope !== "all" ? "selected" : ""}>Current site (${esc(r.domain || headersCurrentDomain)})</option>
+            <option value="all" ${r.scope === "all" ? "selected" : ""}>All sites</option>
+          </select>
+        </div>
+        <div class="cookie-field">
+          <label>Target</label>
+          <select data-hfield="target" data-hi="${i}">
+            <option value="request" ${r.target !== "response" ? "selected" : ""}>Request headers</option>
+            <option value="response" ${r.target === "response" ? "selected" : ""}>Response headers</option>
+          </select>
+        </div>
+        <div class="cookie-actions">
+          <button class="btn-save" data-hsaveidx="${i}">&#128190; Save</button>
+          <button class="btn-del2" data-hdelidx="${i}">&#128465; Delete</button>
+        </div>
+      </div>
+    </div>
+  `).join("");
+
+  headersListEl.querySelectorAll(".cookie-row").forEach((row) => {
+    row.addEventListener("click", (e) => {
+      if (e.target.closest(".cookie-del")) return;
+      row.closest(".cookie-item").classList.toggle("expanded");
+    });
+  });
+
+  headersListEl.querySelectorAll("[data-hdelidx]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      headerRules.splice(parseInt(btn.dataset.hdelidx), 1);
+      chrome.storage.local.set({ headerRules });
+      renderHeaders();
+    });
+  });
+
+  headersListEl.querySelectorAll("[data-hsaveidx]").forEach((btn) => {
+    btn.addEventListener("click", () => saveHeader(parseInt(btn.dataset.hsaveidx)));
+  });
+}
+
+function saveHeader(idx) {
+  const item = headersListEl.querySelector(`.cookie-item[data-hidx="${idx}"]`);
+  const name = item.querySelector('[data-hfield="name"]').value.trim();
+  const value = item.querySelector('[data-hfield="value"]').value;
+  const scope = item.querySelector('[data-hfield="scope"]').value;
+  const target = item.querySelector('[data-hfield="target"]').value;
+  if (!name) return;
+  headerRules[idx] = { ...headerRules[idx], name, value, scope, target };
+  if (scope === "site") headerRules[idx].domain = headersCurrentDomain;
+  chrome.storage.local.set({ headerRules });
+  loadHeaders();
+}
+
+document.getElementById("btnClearHeaders").addEventListener("click", async () => {
+  if (!headerRules.length) return;
+  if (!confirm("Clear all custom header rules?")) return;
+  headerRules = [];
+  await chrome.storage.local.set({ headerRules });
+  renderHeaders();
+});
+
+const addHeaderModal = document.getElementById("addHeaderModal");
+
+document.getElementById("btnAddHeader").addEventListener("click", () => {
+  document.getElementById("newHeaderName").value = "";
+  document.getElementById("newHeaderValue").value = "";
+  document.getElementById("newHeaderScope").value = "site";
+  document.getElementById("newHeaderTarget").value = "request";
+  addHeaderModal.classList.add("show");
+});
+
+document.getElementById("headerModalCancel").addEventListener("click", () => {
+  addHeaderModal.classList.remove("show");
+});
+
+addHeaderModal.addEventListener("click", (e) => {
+  if (e.target === addHeaderModal) addHeaderModal.classList.remove("show");
+});
+
+document.getElementById("headerModalSave").addEventListener("click", async () => {
+  const name = document.getElementById("newHeaderName").value.trim();
+  if (!name) return;
+  const value = document.getElementById("newHeaderValue").value;
+  const scope = document.getElementById("newHeaderScope").value;
+  const target = document.getElementById("newHeaderTarget").value;
+  const rule = { id: Date.now(), name, value, scope, target };
+  if (scope === "site") rule.domain = headersCurrentDomain;
+  headerRules.push(rule);
+  await chrome.storage.local.set({ headerRules });
+  addHeaderModal.classList.remove("show");
+  renderHeaders();
 });
 
 // ═══════════════════════════════════

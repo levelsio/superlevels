@@ -31,7 +31,10 @@ You should do this for **every** Chrome extension you use. Most extensions are c
 Automatically closes inactive tabs after a configurable timeout (default: 5 minutes). Set excluded hosts to keep important tabs alive. View and re-open recently closed tabs.
 
 ### 🍪 Cookie Editor
-Full cookie manager for the current site. View, edit, add, and delete cookies. Export cookies as JSON. Expand any cookie to see and modify all fields including domain, path, SameSite, secure, and httpOnly flags.
+Full cookie manager for the current site. View, edit, add, and delete cookies. Export cookies as JSON or import from a JSON file (compatible with exports from this tool). Expand any cookie to see and modify all fields including domain, path, SameSite, secure, and httpOnly flags.
+
+### 🔐 Custom Headers
+Add, edit, and remove custom HTTP header rules for debugging and development. Set or override headers on outgoing requests or incoming responses. Scope rules to the current site or apply them globally. Rules are applied via Chrome's `declarativeNetRequest` API and stored locally in `chrome.storage.local`.
 
 ### 🔀 Redirect Tracer
 See every redirect hop your browser took to reach the current page. Shows status codes (301, 302, 307, etc.) with a visual chain. Copy the full redirect chain to clipboard.
