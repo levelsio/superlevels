@@ -326,6 +326,53 @@
     }
     .big-switch input:checked + .big-slider { background: #e94560; }
     .big-switch input:checked + .big-slider::before { transform: translateX(26px); }
+    .pill-selector {
+      display: flex;
+      background: #16213e;
+      border: 1px solid #2a2a4a;
+      border-radius: 20px;
+      position: relative;
+      width: 240px;
+      height: 36px;
+      padding: 3px;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    .pill-btn {
+      width: 100%;
+      height: 100%;
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      z-index: 2;
+      transition: color 0.2s ease, text-shadow 0.2s ease;
+      outline: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .pill-btn.active {
+      color: #fff;
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+    }
+    .pill-btn:hover {
+      color: rgba(255, 255, 255, 0.85);
+    }
+    .pill-glider {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: calc((100% - 6px) / 3);
+      height: calc(100% - 6px);
+      background: linear-gradient(135deg, #e94560 0%, #ff6b81 100%);
+      border-radius: 17px;
+      z-index: 1;
+      box-shadow: 0 4px 12px rgba(233, 69, 96, 0.4);
+      transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+    }
     .dark-host {
       text-align: center; font-size: 12px; color: #666;
       margin-bottom: 16px;
@@ -725,37 +772,206 @@
     }
     .btn-cancel { background: #333; color: #aaa; }
     .btn-cancel:hover { background: #444; }
+    /* ── Settings Page ── */
+    .settings-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #2a2a4a;
+    }
+    .settings-bulk-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .btn-bulk {
+      padding: 5px 10px;
+      background: #16213e;
+      border: 1px solid #2a2a4a;
+      border-radius: 6px;
+      color: #ccc;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-bulk:hover {
+      background: #1b2a4a;
+      color: #fff;
+      border-color: #e94560;
+    }
+    .btn-bulk.active {
+      background: #e94560;
+      color: #fff;
+      border-color: #e94560;
+    }
+    .settings-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .setting-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #16213e;
+      border-radius: 10px;
+      transition: opacity 0.2s, transform 0.2s;
+    }
+    .setting-item.hidden-feature {
+      opacity: 0.6;
+      border: 1px dashed #444;
+    }
+    .setting-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 0;
+    }
+    .setting-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+      width: 24px;
+      text-align: center;
+    }
+    .setting-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #ddd;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .setting-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .btn-hide {
+      background: none;
+      border: none;
+      color: #666;
+      font-size: 15px;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-hide:hover {
+      color: #e94560;
+      background: rgba(233, 69, 96, 0.1);
+    }
+    .btn-hide.is-hidden {
+      color: #e94560;
+    }
+    
+    /* ── Tooltips ── */
+    .tooltip-wrapper {
+      position: relative;
+      display: inline-block;
+      z-index: 2;
+    }
+    .tooltip-content {
+      visibility: hidden;
+      position: absolute;
+      bottom: 125%;
+      left: 50%;
+      transform: translateX(-50%) translateY(5px);
+      background: #0b0b16;
+      color: #e0e0e0;
+      text-align: center;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #e94560;
+      font-size: 11px;
+      white-space: nowrap;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+      z-index: 999;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+    }
+    .tooltip-wrapper:hover .tooltip-content {
+      visibility: visible;
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .setting-item {
+      position: relative;
+    }
+    .setting-tooltip {
+      visibility: hidden;
+      position: absolute;
+      bottom: 105%;
+      left: 20px;
+      background-color: #0b0b16;
+      color: #e0e0e0;
+      text-align: left;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #e94560;
+      font-size: 11px;
+      line-height: 1.4;
+      width: 250px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+      z-index: 999;
+      opacity: 0;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      transform: translateY(5px);
+      pointer-events: none;
+    }
+    .setting-item:hover .setting-tooltip {
+      visibility: visible;
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .settings-list.reordering .setting-tooltip {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+    }
+    .settings-list {
+      padding-top: 25px;
+    }
+    
+    /* ── Drag & Drop ── */
+    .setting-item.dragging {
+      opacity: 0.4;
+      border: 1px dashed #e94560;
+    }
+    .drag-handle {
+      cursor: grab;
+      color: #555;
+      padding: 4px 8px;
+      margin-right: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s;
+    }
+    .drag-handle:hover {
+      color: #e94560;
+    }
+    .drag-handle:active {
+      cursor: grabbing;
+    }
   </style>
 </head>
 <body>
 
   <!-- Nav -->
-  <div class="nav">
-    <button class="active" data-page="tabcleaner">🚮 Tabs</button>
-    <button data-page="cookies">🍪 Cookies</button>
-    <button data-page="redirects">🔀 Redirects</button>
-    <button data-page="darkmode">🌙 Dark</button>
-    <button data-page="xdim">𝕏 Dim</button>
-    <button data-page="xunhook">𝕏 Unhook</button>
-    <button data-page="jstoggle">⚡ JS</button>
-    <button data-page="nocookie">🚫 GDPR</button>
-    <button data-page="livecss">🎨 CSS</button>
-    <button data-page="unhook">📺 YT Unhook</button>
-    <button data-page="music">🎵 Music</button>
-    <button data-page="pip">🖼 PiP</button>
-    <button data-page="jsonformat">{} JSON</button>
-  </div>
+  <div class="nav" id="navBar"></div>
 
   <!-- ═══ Tab Cleaner Page ═══ -->
   <div class="page active" id="page-tabcleaner">
     <div class="page-body">
-      <div class="toggle-row">
-        <label>Auto-close enabled</label>
-        <label class="switch">
-          <input type="checkbox" id="enabled">
-          <span class="slider"></span>
-        </label>
-      </div>
       <div class="timeout-row">
         <label>Close after</label>
         <input type="number" id="timeout" min="1" max="1440" value="5">
@@ -774,8 +990,12 @@
   <!-- ═══ Cookie Editor Page ═══ -->
   <div class="page" id="page-cookies">
     <div class="page-body" id="cookieBody">
-      <div class="cookie-header">
+      <div class="cookie-header" style="gap: 10px; align-items: center;">
         <div class="domain" id="cookieDomain">Loading...</div>
+        <div style="position: relative; flex: 1; display: flex; align-items: center;">
+          <input type="text" id="cookieFilter" placeholder="Filter cookies..." style="width: 100%; padding: 4px 24px 4px 8px; font-size: 11px; background: #0f1e3d; border: 1px solid #2a2a4a; border-radius: 4px; color: #ddd; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#e94560'" onblur="this.style.borderColor='#2a2a4a'">
+          <button id="btnClearCookieFilter" style="position: absolute; right: 6px; background: none; border: none; color: #888; cursor: pointer; font-size: 14px; display: none; line-height: 1; padding: 2px; outline: none; font-weight: bold; transition: color 0.1s;" onmouseover="this.style.color='#e94560'" onmouseout="this.style.color='#888'">&times;</button>
+        </div>
         <div class="count" id="cookieCount">0</div>
       </div>
       <div id="cookieList"></div>
@@ -788,6 +1008,10 @@
       <button id="btnDeleteAll" class="danger" title="Delete All Cookies">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
         <span>Delete All</span>
+      </button>
+      <button id="btnDeleteFiltered" class="danger" title="Delete Filtered Cookies" style="display: none;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+        <span>Delete Filtered</span>
       </button>
       <button id="btnRefresh" title="Refresh">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
@@ -825,11 +1049,21 @@
     <div class="page-body">
       <div class="dark-big-toggle">
         <div class="moon">🌙</div>
-        <label class="big-switch">
-          <input type="checkbox" id="darkToggle">
-          <span class="big-slider"></span>
-        </label>
-        <div class="status off" id="darkStatus">OFF</div>
+        <div class="pill-selector" id="darkPillSelector">
+          <div class="tooltip-wrapper" style="flex: 1; height: 100%;">
+            <button data-mode="on" class="pill-btn">ON</button>
+            <span class="tooltip-content">Always force dark theme</span>
+          </div>
+          <div class="tooltip-wrapper" style="flex: 1; height: 100%;">
+            <button data-mode="off" class="pill-btn">OFF</button>
+            <span class="tooltip-content">Always force light theme</span>
+          </div>
+          <div class="tooltip-wrapper" style="flex: 1; height: 100%;">
+            <button data-mode="system" class="pill-btn">SYSTEM</button>
+            <span class="tooltip-content">Follow system light/dark scheme</span>
+          </div>
+          <div class="pill-glider"></div>
+        </div>
       </div>
       <div class="dark-host" id="darkHost"></div>
 
@@ -851,13 +1085,8 @@
   <!-- ═══ X Dim Mode Page ═══ -->
   <div class="page" id="page-xdim">
     <div class="page-body">
-      <div class="xdim-big-toggle">
+      <div class="xdim-big-toggle" style="padding: 10px 0 6px;">
         <div class="xlogo">𝕏</div>
-        <label class="big-switch">
-          <input type="checkbox" id="xdimToggle">
-          <span class="big-slider"></span>
-        </label>
-        <div class="status off" id="xdimStatus">OFF</div>
       </div>
 
       <div class="xdim-themes">
@@ -890,23 +1119,15 @@
         </div>
       </div>
 
-      <div class="xdim-note">
-        Applies a custom dim theme to X / Twitter.<br>
-        Choose a theme or set a custom hue for less eye strain.
-      </div>
+      <div class="xdim-note" id="xdim-desc"></div>
     </div>
   </div>
 
   <!-- ═══ X Unhook Page ═══ -->
   <div class="page" id="page-xunhook">
     <div class="page-body">
-      <div class="unhook-big-toggle">
+      <div class="unhook-big-toggle" style="padding: 10px 0 6px;">
         <div class="yticon" style="font-weight:800;font-family:-apple-system,sans-serif;">𝕏</div>
-        <label class="big-switch">
-          <input type="checkbox" id="xunhookToggle" checked>
-          <span class="big-slider"></span>
-        </label>
-        <div class="status on" id="xunhookStatus">ON</div>
       </div>
 
       <div class="unhook-features">
@@ -916,34 +1137,33 @@
         <div class="unhook-feature"><span class="check">✓</span> Hide Explore in More overflow menu</div>
       </div>
 
-      <div class="xdim-note" style="margin-top:10px">
-        Removes X / Twitter distractions.<br>
-        Toggle off if a page breaks.
-      </div>
+      <div class="xdim-note" style="margin-top:10px" id="xunhook-desc"></div>
     </div>
   </div>
 
   <!-- ═══ Cookie Consent (GDPR) Page ═══ -->
   <div class="page" id="page-nocookie">
     <div class="page-body">
-      <div class="nocookie-big-toggle">
+      <div class="nocookie-big-toggle" style="padding: 10px 0 6px;">
         <div class="ncicon">🚫🍪</div>
-        <label class="big-switch">
-          <input type="checkbox" id="nocookieToggle" checked>
-          <span class="big-slider"></span>
-        </label>
-        <div class="status on" id="nocookieStatus">ON</div>
       </div>
 
-      <div class="nocookie-stats">
-        <b>Auto-dismisses cookie consent popups</b><br>
-        Hides banners via CSS and auto-clicks accept buttons for common consent frameworks:
-        OneTrust, CookieBot, Didomi, Quantcast, GDPR plugins, and more.
+      <div class="nocookie-stats" id="nocookie-desc"></div>
+
+      <!-- Current site exclusions control -->
+      <div class="nocookie-current-site" id="nocookieCurrentSite" style="display:none; flex-direction:column; align-items:center; margin-bottom:14px; gap:6px;">
+        <div class="domain" id="nocookieHost" style="font-size:13px; color:#aaa;">example.com</div>
+        <button id="btnNocookieExclude" class="btn-bulk" style="font-size:12px; padding:6px 16px; border-color:#e94560; color:#e94560;">Exclude This Site</button>
       </div>
 
-      <div class="xdim-note">
+      <div id="nocookieExclusionsHeader" style="display:none; margin-top:14px;">
+        <h2>Excluded Sites</h2>
+        <div class="exc-list" id="nocookieExclusionsList"></div>
+      </div>
+
+      <div class="xdim-note" style="margin-top:20px;">
         Works on most sites automatically.<br>
-        Toggle off if a site breaks.
+        Exclude a site if it breaks.
       </div>
     </div>
   </div>
@@ -963,13 +1183,8 @@
   <!-- ═══ YouTube Unhook Page ═══ -->
   <div class="page" id="page-unhook">
     <div class="page-body">
-      <div class="unhook-big-toggle">
+      <div class="unhook-big-toggle" style="padding: 10px 0 6px;">
         <div class="yticon">📺</div>
-        <label class="big-switch">
-          <input type="checkbox" id="unhookToggle" checked>
-          <span class="big-slider"></span>
-        </label>
-        <div class="status on" id="unhookStatus">ON</div>
       </div>
 
       <div class="unhook-features" id="unhookFeatures">
@@ -980,10 +1195,7 @@
         <div class="unhook-feature"><span class="check">✓</span> Wider video player</div>
       </div>
 
-      <div class="xdim-note" style="margin-top:10px">
-        Removes YouTube distractions.<br>
-        Search still works — just no recommendations.
-      </div>
+      <div class="xdim-note" style="margin-top:10px" id="unhook-desc"></div>
     </div>
   </div>
 
@@ -1078,25 +1290,31 @@
   <!-- ═══ JSON Formatter Page ═══ -->
   <div class="page" id="page-jsonformat">
     <div class="page-body">
-      <div class="nocookie-big-toggle">
+      <div class="nocookie-big-toggle" style="padding: 10px 0 6px;">
         <div class="ncicon">{&thinsp;}</div>
-        <label class="big-switch">
-          <input type="checkbox" id="jsonformatToggle" checked>
-          <span class="big-slider"></span>
-        </label>
-        <div class="status on" id="jsonformatStatus">ON</div>
       </div>
 
-      <div class="nocookie-stats">
-        <b>Auto-formats JSON responses</b><br>
-        Detects pure JSON pages and displays them with syntax highlighting,
-        collapsible sections, and a dark theme. Copy or view raw with one click.
-      </div>
+      <div class="nocookie-stats" id="jsonformat-desc"></div>
 
       <div class="xdim-note">
         Only triggers on actual JSON responses.<br>
         Regular HTML pages are never affected.
       </div>
+    </div>
+  </div>
+
+  <!-- ═══ Settings Page ═══ -->
+  <div class="page" id="page-settings">
+    <div class="page-body">
+      <div class="settings-header">
+        <h2 style="font-size: 13px; color: #fff; margin-bottom: 0;">Customize Features</h2>
+        <div class="settings-bulk-actions">
+          <button id="btnSelectAll" class="btn-bulk">Enable All</button>
+          <button id="btnUnselectAll" class="btn-bulk">Disable All</button>
+          <button id="btnToggleShowHidden" class="btn-bulk">Show Hidden</button>
+        </div>
+      </div>
+      <div class="settings-list" id="settingsList"></div>
     </div>
   </div>
 

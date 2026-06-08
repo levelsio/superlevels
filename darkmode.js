@@ -50,21 +50,59 @@
   const storageKey = "darkmode_" + host;
   const globalKey = "darkmode_global";
 
-  // Load state as early as possible to prevent flash
-  chrome.storage.local.get([storageKey, globalKey, "darkmode_brightness"], (data) => {
-    // Per-site overrides global. If per-site is undefined, fall back to global.
-    const siteState = data[storageKey];
-    const globalState = data[globalKey];
-    const enabled = siteState !== undefined ? siteState : (globalState || false);
-    const brightness = data.darkmode_brightness || 100;
-    if (enabled) applyDarkMode(true, brightness);
-  });
+  let currentMode = "off";
+  let currentBrightness = 100;
+
+  function evaluateAndApply() {
+    chrome.storage.local.get(["feature_darkmode_enabled", storageKey, globalKey, "darkmode_brightness"], (data) => {
+      if (data.feature_darkmode_enabled === false) {
+        applyDarkMode(false, 100);
+        return;
+      }
+      const rawSite = data[storageKey];
+      const rawGlobal = data[globalKey];
+      const rawMode = rawSite !== undefined ? rawSite : (rawGlobal !== undefined ? rawGlobal : "off");
+      
+      let mode = "off";
+      if (rawMode === true || rawMode === "on") mode = "on";
+      else if (rawMode === false || rawMode === "off") mode = "off";
+      else if (rawMode === "system") mode = "system";
+
+      currentMode = mode;
+      currentBrightness = data.darkmode_brightness || 100;
+
+      let shouldEnable = false;
+      if (mode === "on") {
+        shouldEnable = true;
+      } else if (mode === "off") {
+        shouldEnable = false;
+      } else if (mode === "system") {
+        shouldEnable = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      }
+
+      applyDarkMode(shouldEnable, currentBrightness);
+    });
+  }
+
+  // Load state immediately
+  evaluateAndApply();
+
+  // Listen to system color scheme changes
+  const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  if (mediaQuery.addEventListener) {
+    mediaQuery.addEventListener("change", () => {
+      if (currentMode === "system") {
+        applyDarkMode(mediaQuery.matches, currentBrightness);
+      }
+    });
+  }
 
   // Listen for toggle messages from popup
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === "darkmode_toggle") {
-      applyDarkMode(msg.enabled, msg.brightness || 100);
+      evaluateAndApply();
       sendResponse({ ok: true });
+      return;
     }
     if (msg.type === "darkmode_query") {
       sendResponse({

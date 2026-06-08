@@ -1,6 +1,143 @@
 // ═══════════════════════════════════
-//  Navigation
+//  Mock Chrome extension APIs for local testing
 // ═══════════════════════════════════
+if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
+  window.chrome = {
+    storage: {
+      local: {
+        get: (keys, cb) => {
+          const mockData = {};
+          const getVal = (k) => {
+            const val = localStorage.getItem(k);
+            if (val === null) return undefined;
+            try { return JSON.parse(val); } catch { return val; }
+          };
+          if (Array.isArray(keys)) {
+            keys.forEach(k => { mockData[k] = getVal(k); });
+          } else if (typeof keys === "object") {
+            Object.keys(keys).forEach(k => {
+              const v = getVal(k);
+              mockData[k] = v !== undefined ? v : keys[k];
+            });
+          } else if (typeof keys === "string") {
+            mockData[keys] = getVal(keys);
+          }
+          setTimeout(() => cb(mockData), 0);
+        },
+        set: (items, cb) => {
+          Object.keys(items).forEach(k => {
+            localStorage.setItem(k, JSON.stringify(items[k]));
+          });
+          if (cb) setTimeout(cb, 0);
+        },
+        remove: (keys, cb) => {
+          if (Array.isArray(keys)) {
+            keys.forEach(k => localStorage.removeItem(k));
+          } else {
+            localStorage.removeItem(keys);
+          }
+          if (cb) setTimeout(cb, 0);
+        }
+      }
+    },
+    tabs: {
+      query: (queryInfo, cb) => {
+        setTimeout(() => cb([{ id: 1, url: "https://x.com/home" }]), 0);
+      },
+      sendMessage: (tabId, message, cb) => {
+        console.log("Mock sendMessage to tab", tabId, message);
+        if (cb) setTimeout(() => cb({ ok: true }), 0);
+        return Promise.resolve({ ok: true });
+      },
+      reload: (tabId) => {
+        console.log("Mock reload tab", tabId);
+      },
+      create: (createProperties) => {
+        console.log("Mock create tab", createProperties);
+        window.open(createProperties.url, "_blank");
+      }
+    },
+    cookies: {
+      getAll: (details, cb) => {
+        setTimeout(() => cb([
+          { name: "mock_cookie_1", value: "hello_cookie_val", domain: "x.com", path: "/", secure: true, httpOnly: false },
+          { name: "mock_cookie_2", value: "world_cookie_val", domain: "x.com", path: "/", secure: false, httpOnly: true }
+        ]), 0);
+      },
+      set: (details, cb) => {
+        console.log("Mock set cookie", details);
+        if (cb) setTimeout(() => cb(details), 0);
+      },
+      remove: (details, cb) => {
+        console.log("Mock remove cookie", details);
+        if (cb) setTimeout(() => cb(details), 0);
+      }
+    },
+    runtime: {
+      sendMessage: (message, cb) => {
+        console.log("Mock runtime sendMessage", message);
+        let resp = {};
+        if (message.type === "getRedirects") {
+          resp = { chain: [{ url: "http://t.co/xyz", statusCode: 301, redirectUrl: "https://x.com/home" }], finalUrl: "https://x.com/home", finalStatus: 200 };
+        }
+        if (cb) setTimeout(() => cb(resp), 0);
+        return Promise.resolve(resp);
+      },
+      lastError: null
+    },
+    contentSettings: {
+      javascript: {
+        get: (details, cb) => {
+          setTimeout(() => cb({ setting: "allow" }), 0);
+        },
+        set: (details) => {
+          console.log("Mock set contentSettings.javascript", details);
+        }
+      }
+    }
+  };
+}
+
+// ═══════════════════════════════════
+//  Navigation & Customization Setup
+// ═══════════════════════════════════
+const FEATURES = [
+  { id: "tabcleaner", label: "Tab Cleaner", icon: "🚮", navLabel: "Tabs", storageKey: "enabled", default: true, hasTab: true, description: "Automatically closes inactive tabs after a configurable timeout. Set excluded hosts to keep important tabs alive. View and re-open recently closed tabs." },
+  { id: "cookies", label: "Cookie Editor", icon: "🍪", navLabel: "Cookies", storageKey: "feature_cookies_enabled", default: true, hasTab: true, description: "Full cookie manager for the current site. View, edit, add, and delete cookies. Export cookies as JSON." },
+  { id: "redirects", label: "Redirect Tracer", icon: "🔀", navLabel: "Redirects", storageKey: "feature_redirects_enabled", default: true, hasTab: true, description: "See every redirect hop your browser took to reach the current page. Shows status codes with a visual chain." },
+  { id: "darkmode", label: "Dark Mode", icon: "🌙", navLabel: "Dark", storageKey: "feature_darkmode_enabled", default: true, hasTab: true, description: "Instant dark mode for any website using CSS filter inversion. Adjustable brightness. Toggle per-site, globally, or follow system theme." },
+  { id: "xdim", label: "𝕏 Dim Mode", icon: "𝕏", navLabel: "Dim", storageKey: "xdim_enabled", default: false, hasTab: true, description: "Applies a custom dim theme to X / Twitter. Choose a theme or set a custom hue for less eye strain." },
+  { id: "xunhook", label: "𝕏 Unhook", icon: "𝕏", navLabel: "Unhook", storageKey: "xunhook_enabled", default: true, hasTab: true, description: "Removes X / Twitter distractions like sidebar panels (trends, news), keeping search and primary navigation clear." },
+  { id: "jstoggle", label: "JS Toggle", icon: "⚡", navLabel: "JS", storageKey: "feature_jstoggle_enabled", default: true, hasTab: true, description: "Disable JavaScript for the current site. The page will reload when toggled." },
+  { id: "nocookie", label: "GDPR Consent", icon: "🚫", navLabel: "GDPR", storageKey: "nocookie_enabled", default: true, hasTab: true, description: "Auto-dismisses cookie consent popups. Hides banners via CSS and auto-clicks accept buttons for common consent frameworks." },
+  { id: "livecss", label: "CSS Editor", icon: "🎨", navLabel: "CSS", storageKey: "feature_livecss_enabled", default: true, hasTab: true, description: "Write custom CSS for any website, applied in real-time as you type. Saved per-domain." },
+  { id: "unhook", label: "YouTube Unhook", icon: "📺", navLabel: "YT Unhook", storageKey: "unhook_enabled", default: true, hasTab: true, description: "Removes YouTube distractions: no homepage feed, no sidebar suggestions, no end screen overlays, no Shorts." },
+  { id: "music", label: "Music Recognizer", icon: "🎵", navLabel: "Music", storageKey: "feature_music_enabled", default: true, hasTab: true, description: "Shazam-like music identification for any tab. Captures audio and identifies the song via ACRCloud." },
+  { id: "pip", label: "Picture-in-Picture", icon: "🖼", navLabel: "PiP", storageKey: "feature_pip_enabled", default: true, hasTab: true, description: "Pops the largest video on the current tab into a floating PiP window. Click again to exit." },
+  { id: "jsonformat", label: "JSON Formatter", icon: "{}", navLabel: "JSON", storageKey: "jsonformat_enabled", default: true, hasTab: true, description: "Auto-detects pure JSON response pages and formats them with syntax highlighting, collapsible sections, and a dark theme." },
+  { id: "gmaps", label: "Google Maps Links", icon: "🗺", navLabel: "", storageKey: "feature_gmaps_enabled", default: true, hasTab: false, description: "Re-adds clickable Google Maps links and map preview cards to Google Search results." },
+  { id: "viewimage", label: "View Image Button", icon: "🖼", navLabel: "", storageKey: "feature_viewimage_enabled", default: true, hasTab: false, description: "Adds a 'View Image' button back to Google Images, linking directly to the full-size original image." }
+];
+
+function loadTabDescriptions() {
+  const mappings = {
+    "nocookie-desc": "nocookie",
+    "jsonformat-desc": "jsonformat",
+    "unhook-desc": "unhook",
+    "xunhook-desc": "xunhook",
+    "xdim-desc": "xdim"
+  };
+  for (const [elementId, featureId] of Object.entries(mappings)) {
+    const el = document.getElementById(elementId);
+    if (el) {
+      const feat = FEATURES.find(f => f.id === featureId);
+      if (feat) {
+        el.textContent = feat.description;
+      }
+    }
+  }
+}
+
 function switchToPage(page) {
   document.querySelectorAll(".nav button").forEach((b) => b.classList.remove("active"));
   document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
@@ -19,35 +156,75 @@ function switchToPage(page) {
   if (page === "xunhook") loadXUnhook();
   if (page === "jsonformat") loadJsonFormat();
   if (page === "music") { loadMusicHistory(); loadAcrFields(); }
+  if (page === "settings") loadSettings();
   chrome.storage.local.set({ last_tab: page });
 }
 
-document.querySelectorAll(".nav button").forEach((btn) => {
-  btn.addEventListener("click", () => switchToPage(btn.dataset.page));
-});
+function updateNav() {
+  const keys = FEATURES.map(f => f.storageKey).concat(["hidden_features", "last_tab", "feature_order"]);
+  chrome.storage.local.get(keys, (data) => {
+    const hiddenFeatures = data.hidden_features || [];
+    const order = data.feature_order || FEATURES.map(f => f.id);
+    let activePage = data.last_tab || "tabcleaner";
+    
+    const sortedFeatures = [...FEATURES].sort((a, b) => {
+      let idxA = order.indexOf(a.id);
+      let idxB = order.indexOf(b.id);
+      if (idxA === -1) idxA = 999;
+      if (idxB === -1) idxB = 999;
+      return idxA - idxB;
+    });
 
-// Restore last open tab
-chrome.storage.local.get(["last_tab"], (data) => {
-  if (data.last_tab) switchToPage(data.last_tab);
-});
+    const navBar = document.getElementById("navBar");
+    if (!navBar) return;
+
+    let navHtml = "";
+    let firstVisiblePage = "";
+    let activePageIsVisible = false;
+
+    sortedFeatures.forEach((f) => {
+      if (!f.hasTab) return;
+      const isEnabled = data[f.storageKey] !== undefined ? data[f.storageKey] !== false : f.default;
+      const isHidden = hiddenFeatures.includes(f.id);
+      
+      if (isEnabled && !isHidden) {
+        const activeClass = (f.id === activePage) ? "class=\"active\"" : "";
+        navHtml += `<button ${activeClass} data-page="${f.id}">${f.icon} ${f.navLabel}</button>`;
+        if (!firstVisiblePage) firstVisiblePage = f.id;
+        if (f.id === activePage) activePageIsVisible = true;
+      }
+    });
+
+    const settingsActive = (activePage === "settings") ? "class=\"active\"" : "";
+    navHtml += `<button ${settingsActive} data-page="settings">⚙️ Settings</button>`;
+    if (!firstVisiblePage) firstVisiblePage = "settings";
+    if (activePage === "settings") activePageIsVisible = true;
+
+    navBar.innerHTML = navHtml;
+
+    navBar.querySelectorAll("button").forEach((btn) => {
+      btn.addEventListener("click", () => switchToPage(btn.dataset.page));
+    });
+
+    if (!activePageIsVisible) {
+      switchToPage(firstVisiblePage || "settings");
+    } else {
+      switchToPage(activePage);
+    }
+  });
+}
 
 // ═══════════════════════════════════
 //  Tab Cleaner
 // ═══════════════════════════════════
-const enabledEl = document.getElementById("enabled");
 const timeoutEl = document.getElementById("timeout");
 const hostInput = document.getElementById("hostInput");
 const addBtn = document.getElementById("addBtn");
 const listEl = document.getElementById("list");
 
-chrome.storage.local.get(["enabled", "timeoutMin", "exclusions"], (data) => {
-  enabledEl.checked = data.enabled !== false;
+chrome.storage.local.get(["timeoutMin", "exclusions"], (data) => {
   timeoutEl.value = data.timeoutMin || 5;
   renderExclusionList(data.exclusions || []);
-});
-
-enabledEl.addEventListener("change", () => {
-  chrome.storage.local.set({ enabled: enabledEl.checked });
 });
 
 timeoutEl.addEventListener("change", () => {
@@ -87,8 +264,38 @@ function renderExclusionList(exclusions) {
     return;
   }
   listEl.innerHTML = exclusions
-    .map((h) => `<div class="item"><span>${esc(h)}</span><button data-host="${escA(h)}">&times;</button></div>`)
+    .map((h) => {
+      const isExact = h.startsWith("exact:");
+      const displayHost = isExact ? h.substring(6) : h;
+      return `<div class="item" data-host="${escA(h)}">
+        <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;" title="${escA(displayHost)}">${esc(displayHost)}</span>
+        <label style="font-size: 10px; color: #888; display: flex; align-items: center; gap: 4px; margin-right: 8px; cursor: pointer; user-select: none;">
+          <input type="checkbox" class="subdomain-toggle" ${isExact ? "" : "checked"} style="width: 12px; height: 12px; accent-color: #e94560; margin: 0; cursor: pointer;">
+          subdomains
+        </label>
+        <button data-host="${escA(h)}" style="background: none; border: none; color: #e94560; font-size: 16px; cursor: pointer; padding: 0 4px; line-height: 1;">&times;</button>
+      </div>`;
+    })
     .join("");
+
+  listEl.querySelectorAll(".subdomain-toggle").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const item = cb.closest(".item");
+      const oldHost = item.dataset.host;
+      const isChecked = cb.checked;
+      const rawHost = oldHost.startsWith("exact:") ? oldHost.substring(6) : oldHost;
+      const newHost = isChecked ? rawHost : "exact:" + rawHost;
+
+      chrome.storage.local.get(["exclusions"], (data) => {
+        let list = data.exclusions || [];
+        list = list.map((ex) => (ex === oldHost ? newHost : ex));
+        chrome.storage.local.set({ exclusions: list }, () => {
+          renderExclusionList(list);
+        });
+      });
+    });
+  });
+
   listEl.querySelectorAll("button[data-host]").forEach((btn) => {
     btn.addEventListener("click", () => removeHost(btn.dataset.host));
   });
@@ -153,6 +360,36 @@ let currentUrl = "";
 let currentDomain = "";
 let allCookies = [];
 
+function filterAndRenderCookies() {
+  const filterInput = document.getElementById("cookieFilter");
+  const query = filterInput ? filterInput.value.trim().toLowerCase() : "";
+
+  const btnClearCookieFilter = document.getElementById("btnClearCookieFilter");
+  if (btnClearCookieFilter) {
+    btnClearCookieFilter.style.display = filterInput && filterInput.value ? "block" : "none";
+  }
+
+  const filtered = query
+    ? allCookies.filter((c) => c.name.toLowerCase().includes(query))
+    : allCookies;
+
+  cookieCountEl.textContent = filtered.length;
+
+  const btnDeleteAll = document.getElementById("btnDeleteAll");
+  const btnDeleteFiltered = document.getElementById("btnDeleteFiltered");
+  if (btnDeleteAll && btnDeleteFiltered) {
+    if (query) {
+      btnDeleteAll.style.display = "none";
+      btnDeleteFiltered.style.display = "";
+    } else {
+      btnDeleteAll.style.display = "";
+      btnDeleteFiltered.style.display = "none";
+    }
+  }
+
+  renderCookies(filtered);
+}
+
 async function loadCookies() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.url) {
@@ -162,18 +399,27 @@ async function loadCookies() {
     return;
   }
   currentUrl = tab.url;
+  
+  let tabDomain = "";
   try {
-    currentDomain = new URL(tab.url).hostname;
+    tabDomain = new URL(tab.url).hostname;
   } catch {
-    currentDomain = "";
+    tabDomain = "";
   }
+
+  // Clear filter input if domain has changed
+  if (tabDomain !== currentDomain) {
+    const filterInput = document.getElementById("cookieFilter");
+    if (filterInput) filterInput.value = "";
+  }
+  currentDomain = tabDomain;
   cookieDomainEl.textContent = currentDomain;
 
   const cookies = await chrome.cookies.getAll({ url: tab.url });
   cookies.sort((a, b) => a.name.localeCompare(b.name));
   allCookies = cookies;
-  cookieCountEl.textContent = cookies.length;
-  renderCookies(cookies);
+  
+  filterAndRenderCookies();
 }
 
 function renderCookies(cookies) {
@@ -307,6 +553,28 @@ document.getElementById("btnDeleteAll").addEventListener("click", async () => {
   loadCookies();
 });
 
+// Delete Filtered
+const btnDeleteFiltered = document.getElementById("btnDeleteFiltered");
+if (btnDeleteFiltered) {
+  btnDeleteFiltered.addEventListener("click", async () => {
+    const filterInput = document.getElementById("cookieFilter");
+    const query = filterInput ? filterInput.value.trim().toLowerCase() : "";
+    if (!query) return;
+
+    const filtered = allCookies.filter((c) => c.name.toLowerCase().includes(query));
+    if (!filtered.length) return;
+
+    for (const c of filtered) {
+      const protocol = c.secure ? "https" : "http";
+      const url = `${protocol}://${c.domain.replace(/^\./, "")}${c.path}`;
+      await chrome.cookies.remove({ url, name: c.name });
+    }
+
+    if (filterInput) filterInput.value = "";
+    loadCookies();
+  });
+}
+
 // Refresh
 document.getElementById("btnRefresh").addEventListener("click", () => loadCookies());
 
@@ -322,6 +590,20 @@ document.getElementById("btnExport").addEventListener("click", () => {
   a.click();
   URL.revokeObjectURL(url);
 });
+
+// Filter Cookies on input
+const cookieFilterInput = document.getElementById("cookieFilter");
+const btnClearCookieFilter = document.getElementById("btnClearCookieFilter");
+if (cookieFilterInput) {
+  cookieFilterInput.addEventListener("input", filterAndRenderCookies);
+}
+if (btnClearCookieFilter && cookieFilterInput) {
+  btnClearCookieFilter.addEventListener("click", () => {
+    cookieFilterInput.value = "";
+    filterAndRenderCookies();
+    cookieFilterInput.focus();
+  });
+}
 
 // Add Cookie Modal
 const addModal = document.getElementById("addModal");
@@ -442,8 +724,6 @@ document.getElementById("btnRedirectCopy").addEventListener("click", async () =>
 // ═══════════════════════════════════
 //  Dark Mode
 // ═══════════════════════════════════
-const darkToggle = document.getElementById("darkToggle");
-const darkStatus = document.getElementById("darkStatus");
 const darkHostEl = document.getElementById("darkHost");
 const darkBrightness = document.getElementById("darkBrightness");
 const darkBrightnessVal = document.getElementById("darkBrightnessVal");
@@ -468,66 +748,97 @@ async function loadDarkMode() {
   darkBrightnessVal.textContent = brightness + "%";
 
   const siteState = data[siteKey];
-  const globalState = data.darkmode_global || false;
-  const enabled = siteState !== undefined ? siteState : globalState;
+  const globalState = data.darkmode_global !== undefined ? data.darkmode_global : "off";
+  const rawMode = darkScope === "global" ? globalState : (siteState !== undefined ? siteState : globalState);
 
-  darkToggle.checked = enabled;
-  updateDarkStatus(enabled);
+  let mode = "off";
+  if (rawMode === true || rawMode === "on") mode = "on";
+  else if (rawMode === false || rawMode === "off") mode = "off";
+  else if (rawMode === "system") mode = "system";
+
+  const container = document.getElementById("darkPillSelector");
+  if (container) {
+    const btns = Array.from(container.querySelectorAll(".pill-btn"));
+    const activeBtn = container.querySelector(`.pill-btn[data-mode="${mode}"]`);
+    const glider = container.querySelector(".pill-glider");
+    
+    btns.forEach(b => b.classList.remove("active"));
+    if (activeBtn) {
+      activeBtn.classList.add("active");
+      const idx = btns.indexOf(activeBtn);
+      if (glider) {
+        glider.style.transform = `translateX(${idx * 100}%)`;
+      }
+    }
+  }
 }
 
-function updateDarkStatus(on) {
-  darkStatus.textContent = on ? "ON" : "OFF";
-  darkStatus.className = "status " + (on ? "on" : "off");
-}
+async function setDarkMode(mode) {
+  const container = document.getElementById("darkPillSelector");
+  if (container) {
+    const btns = Array.from(container.querySelectorAll(".pill-btn"));
+    const activeBtn = container.querySelector(`.pill-btn[data-mode="${mode}"]`);
+    const glider = container.querySelector(".pill-glider");
+    btns.forEach(b => b.classList.remove("active"));
+    if (activeBtn) {
+      activeBtn.classList.add("active");
+      const idx = btns.indexOf(activeBtn);
+      if (glider) {
+        glider.style.transform = `translateX(${idx * 100}%)`;
+      }
+    }
+  }
 
-async function applyDark() {
-  const enabled = darkToggle.checked;
-  const brightness = parseInt(darkBrightness.value);
-  updateDarkStatus(enabled);
-
-  // Save preference
   if (darkScope === "global") {
-    await chrome.storage.local.set({ darkmode_global: enabled });
+    await chrome.storage.local.set({ darkmode_global: mode });
   } else {
     const siteKey = "darkmode_" + darkHost;
-    await chrome.storage.local.set({ [siteKey]: enabled });
+    await chrome.storage.local.set({ [siteKey]: mode });
   }
-  await chrome.storage.local.set({ darkmode_brightness: brightness });
 
-  // Send to active tab's content script
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tab) {
-    chrome.tabs.sendMessage(tab.id, {
-      type: "darkmode_toggle",
-      enabled,
-      brightness,
-    }).catch(() => {});
+    chrome.tabs.sendMessage(tab.id, { type: "darkmode_toggle" }).catch(() => {});
   }
 }
 
-darkToggle.addEventListener("change", applyDark);
+const darkPillSelector = document.getElementById("darkPillSelector");
+if (darkPillSelector) {
+  darkPillSelector.querySelectorAll(".pill-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      setDarkMode(btn.dataset.mode);
+    });
+  });
+}
 
 darkBrightness.addEventListener("input", () => {
   darkBrightnessVal.textContent = darkBrightness.value + "%";
 });
-darkBrightness.addEventListener("change", applyDark);
+darkBrightness.addEventListener("change", async () => {
+  const brightness = parseInt(darkBrightness.value);
+  await chrome.storage.local.set({ darkmode_brightness: brightness });
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab) {
+    chrome.tabs.sendMessage(tab.id, { type: "darkmode_toggle" }).catch(() => {});
+  }
+});
 
 scopeSite.addEventListener("click", () => {
   darkScope = "site";
   scopeSite.classList.add("active");
   scopeGlobal.classList.remove("active");
+  loadDarkMode();
 });
 scopeGlobal.addEventListener("click", () => {
   darkScope = "global";
   scopeGlobal.classList.add("active");
   scopeSite.classList.remove("active");
+  loadDarkMode();
 });
 
 // ═══════════════════════════════════
 //  X Dim Mode
 // ═══════════════════════════════════
-const xdimToggle = document.getElementById("xdimToggle");
-const xdimStatus = document.getElementById("xdimStatus");
 const xdimPreview = document.getElementById("xdimPreview");
 const xdimHueSlider = document.getElementById("xdimHueSlider");
 const xdimHueVal = document.getElementById("xdimHueVal");
@@ -547,23 +858,15 @@ let xdimTheme = "dim";
 let xdimCustomHue = 210;
 
 async function loadXDim() {
-  const data = await chrome.storage.local.get(["xdim_enabled", "xdim_theme", "xdim_customHue"]);
-  const enabled = data.xdim_enabled || false;
+  const data = await chrome.storage.local.get(["xdim_theme", "xdim_customHue"]);
   xdimTheme = data.xdim_theme || "dim";
   xdimCustomHue = data.xdim_customHue || 210;
 
-  xdimToggle.checked = enabled;
   xdimHueSlider.value = xdimCustomHue;
   xdimHueVal.textContent = xdimCustomHue + "°";
 
-  updateXDimStatus(enabled);
   updateXDimThemeDots();
   updateXDimPreview();
-}
-
-function updateXDimStatus(on) {
-  xdimStatus.textContent = on ? "ON" : "OFF";
-  xdimStatus.className = "status " + (on ? "on" : "off");
 }
 
 function updateXDimThemeDots() {
@@ -590,17 +893,6 @@ function updateXDimPreview() {
   tweet.style.borderColor = `hsl(${h}, ${bSat}%, 26%)`;
 }
 
-xdimToggle.addEventListener("change", async () => {
-  const enabled = xdimToggle.checked;
-  updateXDimStatus(enabled);
-  await chrome.storage.local.set({ xdim_enabled: enabled });
-
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
-    chrome.tabs.sendMessage(tab.id, { type: "xdim_toggle", enabled }).catch(() => {});
-  }
-});
-
 xdimDots.forEach((dot) => {
   dot.addEventListener("click", async () => {
     xdimTheme = dot.dataset.theme;
@@ -620,34 +912,114 @@ xdimHueSlider.addEventListener("change", async () => {
   await chrome.storage.local.set({ xdim_customHue: xdimCustomHue });
 });
 
-// ═══════════════════════════════════
-//  Cookie Consent (GDPR) Dismisser
-// ═══════════════════════════════════
-const nocookieToggle = document.getElementById("nocookieToggle");
-const nocookieStatus = document.getElementById("nocookieStatus");
+let nocookieHost = "";
 
 async function loadNoCookie() {
-  const data = await chrome.storage.local.get(["nocookie_enabled"]);
-  const enabled = data.nocookie_enabled !== false;
-  nocookieToggle.checked = enabled;
-  updateNoCookieUI(enabled);
-}
-
-function updateNoCookieUI(on) {
-  nocookieStatus.textContent = on ? "ON" : "OFF";
-  nocookieStatus.className = "status " + (on ? "on" : "off");
-}
-
-nocookieToggle.addEventListener("change", async () => {
-  const enabled = nocookieToggle.checked;
-  updateNoCookieUI(enabled);
-  await chrome.storage.local.set({ nocookie_enabled: enabled });
-
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
-    chrome.tabs.sendMessage(tab.id, { type: "nocookie_toggle", enabled }).catch(() => {});
+  const container = document.getElementById("nocookieCurrentSite");
+  const hostLabel = document.getElementById("nocookieHost");
+  const btnExclude = document.getElementById("btnNocookieExclude");
+  const listHeader = document.getElementById("nocookieExclusionsHeader");
+  const listEl = document.getElementById("nocookieExclusionsList");
+
+  if (!container || !hostLabel || !btnExclude || !listHeader || !listEl) return;
+
+  if (tab && tab.url && (tab.url.startsWith("http://") || tab.url.startsWith("https://"))) {
+    try {
+      nocookieHost = new URL(tab.url).hostname;
+    } catch {
+      nocookieHost = "";
+    }
+  } else {
+    nocookieHost = "";
   }
-});
+
+  if (nocookieHost) {
+    container.style.display = "flex";
+    hostLabel.textContent = nocookieHost;
+  } else {
+    container.style.display = "none";
+  }
+
+  chrome.storage.local.get(["nocookie_exclusions"], (data) => {
+    const exclusions = data.nocookie_exclusions || [];
+
+    if (nocookieHost) {
+      const isExcluded = exclusions.includes(nocookieHost);
+      btnExclude.textContent = isExcluded ? "Re-enable Consent Dismissal" : "Exclude This Site";
+      if (isExcluded) {
+        btnExclude.style.borderColor = "#4caf50";
+        btnExclude.style.color = "#4caf50";
+      } else {
+        btnExclude.style.borderColor = "#e94560";
+        btnExclude.style.color = "#e94560";
+      }
+    }
+
+    if (exclusions.length > 0) {
+      listHeader.style.display = "block";
+      listEl.innerHTML = exclusions
+        .map((h) => `<div class="item"><span>${esc(h)}</span><button data-host="${escA(h)}">&times;</button></div>`)
+        .join("");
+
+      listEl.querySelectorAll("button[data-host]").forEach((btn) => {
+        btn.addEventListener("click", () => removeNocookieExclusion(btn.dataset.host));
+      });
+    } else {
+      listHeader.style.display = "none";
+      listEl.innerHTML = "";
+    }
+  });
+}
+
+async function toggleNocookieExclusion() {
+  if (!nocookieHost) return;
+  chrome.storage.local.get(["nocookie_exclusions"], async (data) => {
+    let exclusions = data.nocookie_exclusions || [];
+    if (exclusions.includes(nocookieHost)) {
+      exclusions = exclusions.filter((h) => h !== nocookieHost);
+    } else {
+      exclusions.push(nocookieHost);
+    }
+    await chrome.storage.local.set({ nocookie_exclusions: exclusions });
+    
+    // Notify active tab content script
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab) {
+      chrome.tabs.sendMessage(tab.id, { type: "nocookie_exclusions_updated" }).catch(() => {});
+      chrome.tabs.reload(tab.id);
+    }
+    
+    loadNoCookie();
+  });
+}
+
+function removeNocookieExclusion(host) {
+  chrome.storage.local.get(["nocookie_exclusions"], async (data) => {
+    const exclusions = (data.nocookie_exclusions || []).filter((h) => h !== host);
+    await chrome.storage.local.set({ nocookie_exclusions: exclusions });
+    
+    // Notify active tab content script
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab) {
+      chrome.tabs.sendMessage(tab.id, { type: "nocookie_exclusions_updated" }).catch(() => {});
+      try {
+        const tabHost = new URL(tab.url).hostname;
+        if (tabHost === host) {
+          chrome.tabs.reload(tab.id);
+        }
+      } catch {}
+    }
+    
+    loadNoCookie();
+  });
+}
+
+// Bind button listener
+const btnNocookieExclude = document.getElementById("btnNocookieExclude");
+if (btnNocookieExclude) {
+  btnNocookieExclude.addEventListener("click", toggleNocookieExclusion);
+}
 
 // ═══════════════════════════════════
 //  Live CSS Editor
@@ -711,60 +1083,12 @@ livecssClear.addEventListener("click", async () => {
 // ═══════════════════════════════════
 //  YouTube Unhook
 // ═══════════════════════════════════
-const unhookToggle = document.getElementById("unhookToggle");
-const unhookStatus = document.getElementById("unhookStatus");
-
-async function loadUnhook() {
-  const data = await chrome.storage.local.get(["unhook_enabled"]);
-  const enabled = data.unhook_enabled !== false;
-  unhookToggle.checked = enabled;
-  updateUnhookUI(enabled);
-}
-
-function updateUnhookUI(on) {
-  unhookStatus.textContent = on ? "ON" : "OFF";
-  unhookStatus.className = "status " + (on ? "on" : "off");
-}
-
-unhookToggle.addEventListener("change", async () => {
-  const enabled = unhookToggle.checked;
-  updateUnhookUI(enabled);
-  await chrome.storage.local.set({ unhook_enabled: enabled });
-
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
-    chrome.tabs.sendMessage(tab.id, { type: "unhook_toggle", enabled }).catch(() => {});
-  }
-});
+function loadUnhook() {}
 
 // ═══════════════════════════════════
 //  X Unhook
 // ═══════════════════════════════════
-const xunhookToggle = document.getElementById("xunhookToggle");
-const xunhookStatus = document.getElementById("xunhookStatus");
-
-async function loadXUnhook() {
-  const data = await chrome.storage.local.get(["xunhook_enabled"]);
-  const enabled = data.xunhook_enabled !== false;
-  xunhookToggle.checked = enabled;
-  updateXUnhookUI(enabled);
-}
-
-function updateXUnhookUI(on) {
-  xunhookStatus.textContent = on ? "ON" : "OFF";
-  xunhookStatus.className = "status " + (on ? "on" : "off");
-}
-
-xunhookToggle.addEventListener("change", async () => {
-  const enabled = xunhookToggle.checked;
-  updateXUnhookUI(enabled);
-  await chrome.storage.local.set({ xunhook_enabled: enabled });
-
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
-    chrome.tabs.sendMessage(tab.id, { type: "xunhook_toggle", enabled }).catch(() => {});
-  }
-});
+function loadXUnhook() {}
 
 // ═══════════════════════════════════
 //  JavaScript Toggle
@@ -1099,31 +1423,261 @@ async function enterPiP() {
 // ═══════════════════════════════════
 //  JSON Formatter
 // ═══════════════════════════════════
-const jsonformatToggle = document.getElementById("jsonformatToggle");
-const jsonformatStatus = document.getElementById("jsonformatStatus");
+function loadJsonFormat() {}
 
-async function loadJsonFormat() {
-  const data = await chrome.storage.local.get(["jsonformat_enabled"]);
-  const enabled = data.jsonformat_enabled !== false;
-  jsonformatToggle.checked = enabled;
-  updateJsonFormatUI(enabled);
+// ═══════════════════════════════════
+//  Settings Panel Customization
+// ═══════════════════════════════════
+let showHidden = false;
+
+function renderFeatureRow(f, isEnabled, isHidden, isVisible) {
+  const toggleId = `setting-toggle-${f.id}`;
+  const hiddenClass = isHidden ? "hidden-feature" : "";
+  const displayStyle = isVisible ? "" : "style=\"display: none !important;\"";
+  const hideBtnIcon = isHidden
+    ? `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
+    : `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+  const hideTitle = isHidden ? "Show feature in navigation" : "Hide feature from navigation";
+  
+  const dragHandleIcon = `
+    <svg width="12" height="18" viewBox="0 0 12 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="3" cy="3" r="1" fill="currentColor"/>
+      <circle cx="3" cy="9" r="1" fill="currentColor"/>
+      <circle cx="3" cy="15" r="1" fill="currentColor"/>
+      <circle cx="9" cy="3" r="1" fill="currentColor"/>
+      <circle cx="9" cy="9" r="1" fill="currentColor"/>
+      <circle cx="9" cy="15" r="1" fill="currentColor"/>
+    </svg>
+  `;
+
+  return `
+    <div class="setting-item ${hiddenClass}" data-feature-id="${f.id}" draggable="true" ${displayStyle}>
+      <div class="setting-tooltip">${f.description}</div>
+      <div class="setting-info">
+        <div class="drag-handle" title="Drag to reorder">
+          ${dragHandleIcon}
+        </div>
+        <span class="setting-icon">${f.icon}</span>
+        <span class="setting-label">${f.label}</span>
+      </div>
+      <div class="setting-actions">
+        <button class="btn-hide ${isHidden ? 'is-hidden' : ''}" data-id="${f.id}" title="${hideTitle}">
+          ${hideBtnIcon}
+        </button>
+        <label class="switch">
+          <input type="checkbox" id="${toggleId}" ${isEnabled ? "checked" : ""}>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+  `;
 }
 
-function updateJsonFormatUI(on) {
-  jsonformatStatus.textContent = on ? "ON" : "OFF";
-  jsonformatStatus.className = "status " + (on ? "on" : "off");
+function initDragAndDrop() {
+  const container = document.getElementById("settingsList");
+  if (!container) return;
+
+  let dragEl = null;
+
+  container.addEventListener("dragstart", (e) => {
+    const item = e.target.closest(".setting-item");
+    if (!item) return;
+    dragEl = item;
+    item.classList.add("dragging");
+    container.classList.add("reordering");
+    e.dataTransfer.effectAllowed = "move";
+  });
+
+  container.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    const target = e.target.closest(".setting-item");
+    if (!target || target === dragEl) return;
+    
+    const rect = target.getBoundingClientRect();
+    const next = (e.clientY - rect.top) / (rect.bottom - rect.top) > 0.5;
+    container.insertBefore(dragEl, next ? target.nextSibling : target);
+  });
+
+  container.addEventListener("dragend", () => {
+    if (dragEl) {
+      dragEl.classList.remove("dragging");
+      dragEl = null;
+    }
+    container.classList.remove("reordering");
+    saveNewOrder();
+  });
 }
 
-jsonformatToggle.addEventListener("change", async () => {
-  const enabled = jsonformatToggle.checked;
-  updateJsonFormatUI(enabled);
-  await chrome.storage.local.set({ jsonformat_enabled: enabled });
+function saveNewOrder() {
+  const items = Array.from(document.querySelectorAll("#settingsList .setting-item"));
+  const newOrder = items.map(item => item.dataset.featureId);
+  
+  chrome.storage.local.set({ feature_order: newOrder }, () => {
+    updateNav();
+  });
+}
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
-    chrome.tabs.sendMessage(tab.id, { type: "jsonformat_toggle", enabled }).catch(() => {});
-  }
+function loadSettings() {
+  const keys = FEATURES.map(f => f.storageKey).concat(["hidden_features", "feature_order"]);
+  chrome.storage.local.get(keys, (data) => {
+    const hiddenFeatures = data.hidden_features || [];
+    const order = data.feature_order || FEATURES.map(f => f.id);
+    const container = document.getElementById("settingsList");
+    if (!container) return;
+
+    let enabledCount = 0;
+    FEATURES.forEach(f => {
+      const isEnabled = data[f.storageKey] !== undefined ? data[f.storageKey] !== false : f.default;
+      if (isEnabled) enabledCount++;
+    });
+
+    const headerTitle = document.querySelector("#page-settings .settings-header h2");
+    if (headerTitle) {
+      headerTitle.textContent = `${enabledCount} of ${FEATURES.length} features active`;
+    }
+
+    const sortedFeatures = [...FEATURES].sort((a, b) => {
+      let idxA = order.indexOf(a.id);
+      let idxB = order.indexOf(b.id);
+      if (idxA === -1) idxA = 999;
+      if (idxB === -1) idxB = 999;
+      return idxA - idxB;
+    });
+
+    let html = "";
+    sortedFeatures.forEach(f => {
+      const isEnabled = data[f.storageKey] !== undefined ? data[f.storageKey] !== false : f.default;
+      const isHidden = hiddenFeatures.includes(f.id);
+      const isVisible = !isHidden || showHidden;
+      
+      html += renderFeatureRow(f, isEnabled, isHidden, isVisible);
+    });
+
+    container.innerHTML = html || `<div class="empty">No features to display</div>`;
+    initDragAndDrop();
+
+    container.querySelectorAll(".switch input").forEach(input => {
+      input.addEventListener("change", () => {
+        const item = input.closest(".setting-item");
+        const featureId = item.dataset.featureId;
+        const feature = FEATURES.find(f => f.id === featureId);
+        
+        chrome.storage.local.set({ [feature.storageKey]: input.checked }, () => {
+          if (featureId === "darkmode") {
+            chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+              if (tab) {
+                chrome.tabs.sendMessage(tab.id, { type: "darkmode_toggle" }).catch(() => {});
+              }
+            });
+          }
+          if (featureId === "nocookie") {
+            chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+              if (tab) chrome.tabs.sendMessage(tab.id, { type: "nocookie_toggle", enabled: input.checked }).catch(() => {});
+            });
+          }
+          if (featureId === "unhook") {
+            chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+              if (tab) chrome.tabs.sendMessage(tab.id, { type: "unhook_toggle", enabled: input.checked }).catch(() => {});
+            });
+          }
+          if (featureId === "xunhook") {
+            chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+              if (tab) chrome.tabs.sendMessage(tab.id, { type: "xunhook_toggle", enabled: input.checked }).catch(() => {});
+            });
+          }
+          if (featureId === "xdim") {
+            chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+              if (tab) chrome.tabs.sendMessage(tab.id, { type: "xdim_toggle", enabled: input.checked }).catch(() => {});
+            });
+          }
+          if (featureId === "jsonformat") {
+            chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+              if (tab) chrome.tabs.sendMessage(tab.id, { type: "jsonformat_toggle", enabled: input.checked }).catch(() => {});
+            });
+          }
+          
+          loadSettings();
+          updateNav();
+        });
+      });
+    });
+
+    container.querySelectorAll(".btn-hide").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const featureId = btn.dataset.id;
+        chrome.storage.local.get(["hidden_features"], (res) => {
+          let list = res.hidden_features || [];
+          if (list.includes(featureId)) {
+            list = list.filter(id => id !== featureId);
+          } else {
+            list.push(featureId);
+          }
+          chrome.storage.local.set({ hidden_features: list }, () => {
+            loadSettings();
+            updateNav();
+          });
+        });
+      });
+    });
+  });
+}
+
+document.getElementById("btnSelectAll").addEventListener("click", () => {
+  const updates = {};
+  FEATURES.forEach(f => {
+    updates[f.storageKey] = true;
+  });
+  chrome.storage.local.set(updates, () => {
+    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+      if (tab) {
+        chrome.tabs.sendMessage(tab.id, { type: "darkmode_toggle" }).catch(() => {});
+        chrome.tabs.sendMessage(tab.id, { type: "nocookie_toggle", enabled: true }).catch(() => {});
+        chrome.tabs.sendMessage(tab.id, { type: "unhook_toggle", enabled: true }).catch(() => {});
+        chrome.tabs.sendMessage(tab.id, { type: "xunhook_toggle", enabled: true }).catch(() => {});
+        chrome.tabs.sendMessage(tab.id, { type: "xdim_toggle", enabled: true }).catch(() => {});
+        chrome.tabs.sendMessage(tab.id, { type: "jsonformat_toggle", enabled: true }).catch(() => {});
+      }
+    });
+    loadSettings();
+    updateNav();
+  });
 });
+
+document.getElementById("btnUnselectAll").addEventListener("click", () => {
+  const updates = {};
+  FEATURES.forEach(f => {
+    updates[f.storageKey] = false;
+  });
+  chrome.storage.local.set(updates, () => {
+    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+      if (tab) {
+        chrome.tabs.sendMessage(tab.id, { type: "darkmode_toggle" }).catch(() => {});
+        chrome.tabs.sendMessage(tab.id, { type: "nocookie_toggle", enabled: false }).catch(() => {});
+        chrome.tabs.sendMessage(tab.id, { type: "unhook_toggle", enabled: false }).catch(() => {});
+        chrome.tabs.sendMessage(tab.id, { type: "xunhook_toggle", enabled: false }).catch(() => {});
+        chrome.tabs.sendMessage(tab.id, { type: "xdim_toggle", enabled: false }).catch(() => {});
+        chrome.tabs.sendMessage(tab.id, { type: "jsonformat_toggle", enabled: false }).catch(() => {});
+      }
+    });
+    loadSettings();
+    updateNav();
+  });
+});
+
+document.getElementById("btnToggleShowHidden").addEventListener("click", () => {
+  showHidden = !showHidden;
+  const btn = document.getElementById("btnToggleShowHidden");
+  if (showHidden) {
+    btn.classList.add("active");
+  } else {
+    btn.classList.remove("active");
+  }
+  loadSettings();
+});
+
+// Initial layout & descriptions load
+loadTabDescriptions();
+updateNav();
 
 // ═══════════════════════════════════
 //  Helpers
