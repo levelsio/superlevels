@@ -3,6 +3,29 @@
 //  Auto-detects pure JSON pages and formats with syntax highlighting
 // ═══════════════════════════════════
 (() => {
+  if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
+    window.chrome = {
+      storage: {
+        local: {
+          get: (keys, cb) => {
+            const res = {};
+            if (Array.isArray(keys)) {
+              keys.forEach(k => { res[k] = true; });
+            } else if (typeof keys === "string") {
+              res[keys] = true;
+            }
+            cb(res);
+          }
+        }
+      },
+      runtime: {
+        onMessage: {
+          addListener: () => {}
+        }
+      }
+    };
+  }
+
   const STYLE_ID = "sl-jsonformat";
 
   function isJsonPage() {
@@ -181,6 +204,28 @@
         background: #1b2a4a;
         color: #fff;
       }
+      .sl-jf-search {
+        padding: 5px 10px;
+        background: #16213e;
+        color: #fff;
+        border: 1px solid #2a2a4a;
+        border-radius: 5px;
+        font-size: 11px;
+        font-family: -apple-system, sans-serif;
+        outline: none;
+        width: 120px;
+        transition: width 0.2s, border-color 0.2s;
+      }
+      .sl-jf-search::placeholder {
+        color: #666;
+      }
+      .sl-jf-search:hover {
+        border-color: #3b4b7a;
+      }
+      .sl-jf-search:focus {
+        width: 180px;
+        border-color: #e94560;
+      }
     `;
 
     // Replace body content
@@ -190,6 +235,60 @@
     // Toolbar
     const toolbar = document.createElement("div");
     toolbar.className = "sl-jf-toolbar";
+
+    const searchInput = document.createElement("input");
+    searchInput.type = "search";
+    searchInput.placeholder = "Search...";
+    searchInput.className = "sl-jf-search";
+
+    searchInput.addEventListener("input", () => {
+      const query = searchInput.value.toLowerCase();
+      // 1. Reset all previously highlighted targets
+      const targets = document.querySelectorAll(".sl-jf-key, .sl-jf-string, .sl-jf-number, .sl-jf-bool, .sl-jf-null");
+      targets.forEach((el) => {
+        const orig = el.getAttribute("data-orig");
+        if (orig !== null) {
+          el.innerHTML = orig;
+          el.removeAttribute("data-orig");
+        }
+      });
+
+      if (!query) return;
+
+      // 2. Perform search and highlight matches
+      targets.forEach((el) => {
+        const text = el.textContent;
+        const lowerText = text.toLowerCase();
+        if (lowerText.includes(query)) {
+          // Cache original content if not already cached
+          el.setAttribute("data-orig", el.innerHTML);
+
+          // Escape HTML and highlight matches preserving case
+          const escapedQuery = query.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+          const regex = new RegExp(`(${escapedQuery})`, 'gi');
+          el.innerHTML = el.textContent
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(regex, `<mark style="background:#e94560; color:#fff; padding:0 2px; border-radius:2px;">$1</mark>`);
+
+          // 3. Expand parent blocks
+          let parent = el.parentElement;
+          while (parent) {
+            if (parent.classList.contains("sl-jf-collapsible")) {
+              const toggle = parent.previousElementSibling;
+              const ellipsis = parent.nextElementSibling;
+              if (toggle && toggle.dataset.collapsed === "true") {
+                toggle.dataset.collapsed = "false";
+                parent.style.display = "";
+                if (ellipsis) ellipsis.style.display = "none";
+              }
+            }
+            parent = parent.parentElement;
+          }
+        }
+      });
+    });
 
     const copyBtn = document.createElement("button");
     copyBtn.textContent = "Copy";
@@ -226,6 +325,7 @@
       collapseBtn.textContent = shouldCollapse ? "Expand All" : "Collapse All";
     });
 
+    toolbar.appendChild(searchInput);
     toolbar.appendChild(copyBtn);
     toolbar.appendChild(collapseBtn);
     toolbar.appendChild(rawBtn);

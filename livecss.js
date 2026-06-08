@@ -18,7 +18,8 @@
   // Load saved CSS for this host on page load
   const host = location.hostname;
   if (host) {
-    chrome.storage.local.get(["livecss_" + host], (data) => {
+    chrome.storage.local.get(["feature_livecss_enabled", "livecss_" + host], (data) => {
+      if (data.feature_livecss_enabled === false) return;
       const css = data["livecss_" + host];
       if (css) applyCSS(css);
     });
@@ -27,7 +28,11 @@
   // Listen for live updates from popup
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === "livecss_update") {
-      applyCSS(msg.css);
+      chrome.storage.local.get(["feature_livecss_enabled"], (data) => {
+        if (data.feature_livecss_enabled !== false) {
+          applyCSS(msg.css);
+        }
+      });
     }
   });
 })();

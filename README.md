@@ -28,16 +28,16 @@ You should do this for **every** Chrome extension you use. Most extensions are c
 ## Features
 
 ### 🚮 Tab Cleaner
-Automatically closes inactive tabs after a configurable timeout (default: 5 minutes). Set excluded hosts to keep important tabs alive. View and re-open recently closed tabs.
+Automatically closes inactive tabs after a configurable timeout (default: 5 minutes). Set exact host or subdomain exclusions to keep important tabs alive. View relative timestamps, favicons, and re-open recently closed tabs with one click.
 
 ### 🍪 Cookie Editor
-Full cookie manager for the current site. View, edit, add, and delete cookies. Export cookies as JSON. Expand any cookie to see and modify all fields including domain, path, SameSite, secure, and httpOnly flags.
+Full cookie manager for the current site. View, edit, add, and delete cookies. Export cookies as JSON. Filter cookies by name, delete filtered cookies in bulk, and expand any cookie to see and modify all fields including domain, path, SameSite, secure, and httpOnly flags.
 
 ### 🔀 Redirect Tracer
 See every redirect hop your browser took to reach the current page. Shows status codes (301, 302, 307, etc.) with a visual chain. Copy the full redirect chain to clipboard.
 
 ### 🌙 Dark Mode
-Instant dark mode for any website using CSS filter inversion. Adjustable brightness. Toggle per-site or globally. Images and videos are automatically re-inverted so they look normal.
+Instant dark mode for any website using CSS filter inversion. Adjustable brightness. Toggle per-site, globally, or select **System** to follow your system preference automatically. Images and videos are automatically re-inverted so they look normal.
 
 ### 𝕏 X Dim Mode
 Custom dim theme for X/Twitter with 7 color palettes: Dim, Slate, Jade, Plum, Dusk, Ember, or a custom hue. Live preview in the popup.
@@ -46,7 +46,7 @@ Custom dim theme for X/Twitter with 7 color palettes: Dim, Slate, Jade, Plum, Du
 Disable JavaScript per-site with one click. Useful for debugging, reading articles without popups, or testing progressive enhancement. Page reloads automatically.
 
 ### 🚫 GDPR Cookie Consent Dismisser
-Auto-hides and auto-clicks cookie consent banners. Supports OneTrust, CookieBot, Didomi, Quantcast, GDPR plugins, and dozens more frameworks. Toggle off if a site breaks.
+Auto-hides and auto-clicks cookie consent banners. Supports OneTrust, CookieBot, Didomi, Quantcast, GDPR plugins, and dozens more frameworks. Exclude specific sites with one click if a site breaks and manage excluded domains directly from the popup.
 
 ### 🎨 Live CSS Editor
 Write custom CSS for any website, applied in real-time as you type. Saved per-domain. Supports tab key for indentation.
@@ -67,7 +67,14 @@ Re-adds clickable Maps links and map preview cards to Google Search results.
 Adds a "View Image" button back to Google Images, linking directly to the full-size original image.
 
 ### {} JSON Formatter
-Auto-detects pure JSON response pages and formats them with syntax highlighting, collapsible sections, and a dark theme. Copy or view raw with one click. Never triggers on regular HTML pages.
+Auto-detects pure JSON response pages and formats them with syntax highlighting, collapsible sections, and a dark theme. Instant search highlights matching keys/values and auto-expands collapsed JSON sections. Copy or view raw with one click. Never triggers on regular HTML pages.
+
+### ⚙️ Customize & Settings
+Customize the extension by turning on only the features you care about:
+- **Enable/Disable Toggles**: Turn off features completely to save CPU, memory, and prevent their scripts/listeners from executing.
+- **Hiding Tabs**: Hide active feature tabs from the popup navigation bar to keep the UI clean while keeping them running in the background.
+- **Drag & Drop Reordering**: Drag and drop feature items in the settings list to custom-reorder the tabs in the popup navigation bar.
+- **Bulk Actions**: Enable/Disable all features at once, and show/manage hidden features easily.
 
 ## Install
 
