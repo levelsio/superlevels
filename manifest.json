@@ -26,7 +26,7 @@
     "run_at": "document_start"
   }, {
     "matches": ["*://x.com/*", "*://twitter.com/*", "*://mobile.x.com/*", "*://mobile.twitter.com/*"],
-    "js": ["xdim.js", "xunhook.js"],
+    "js": ["xdim.js", "xunhook.js", "xreply.js"],
     "run_at": "document_start"
   }, {
     "matches": ["*://www.google.com/*", "*://www.google.co.uk/*", "*://www.google.co.jp/*", "*://www.google.co.in/*", "*://www.google.co.kr/*", "*://www.google.co.id/*", "*://www.google.com.br/*", "*://www.google.com.au/*", "*://www.google.com.mx/*", "*://www.google.de/*", "*://www.google.fr/*", "*://www.google.es/*", "*://www.google.it/*", "*://www.google.nl/*", "*://www.google.pt/*", "*://www.google.pl/*", "*://www.google.se/*", "*://www.google.ca/*", "*://www.google.ru/*"],

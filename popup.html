@@ -742,6 +742,7 @@
     <button data-page="darkmode">🌙 Dark</button>
     <button data-page="xdim">𝕏 Dim</button>
     <button data-page="xunhook">𝕏 Unhook</button>
+    <button data-page="xreply">𝕏 Reply</button>
     <button data-page="jstoggle">⚡ JS</button>
     <button data-page="nocookie">🚫 Cookies=OK</button>
     <button data-page="livecss">🎨 CSS</button>
@@ -924,6 +925,32 @@
       <div class="xdim-note" style="margin-top:10px">
         Removes X / Twitter distractions.<br>
         Toggle off if a page breaks.
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ X Reply Page ═══ -->
+  <div class="page" id="page-xreply">
+    <div class="page-body">
+      <div class="unhook-big-toggle">
+        <div class="yticon" style="font-weight:800;font-family:-apple-system,sans-serif;">𝕏</div>
+        <label class="big-switch">
+          <input type="checkbox" id="xreplyToggle" checked>
+          <span class="big-slider"></span>
+        </label>
+        <div class="status on" id="xreplyStatus">ON</div>
+      </div>
+
+      <div class="unhook-features">
+        <div class="unhook-feature"><span class="check">✓</span> Auto-opens the audience picker when you start a post</div>
+        <div class="unhook-feature"><span class="check">✓</span> Selects "Accounts you follow and who they follow"</div>
+        <div class="unhook-feature"><span class="check">✓</span> Skips if you've already set the audience</div>
+        <div class="unhook-feature"><span class="check">✓</span> Manual changes in the picker are respected</div>
+      </div>
+
+      <div class="xdim-note" style="margin-top:10px">
+        Tightens default reply audience on new tweets.<br>
+        Toggle off to leave the picker untouched.
       </div>
     </div>
   </div>

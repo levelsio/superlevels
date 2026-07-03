@@ -86,8 +86,14 @@ const STATIC_CSS = `
   html.${DIM_CLASS} [style*="background-color: rgba(0, 0, 0, 1)"] {
     background-color: var(--xdm-bg) !important;
   }
-  html.${DIM_CLASS} [style*="background-color: rgb(24, 24, 27)"] {
+  html.${DIM_CLASS} [style*="background-color: rgb(24, 24, 27)"],
+  html.${DIM_CLASS} [style*="background-color: rgb(22, 24, 28)"],
+  html.${DIM_CLASS} [style*="background-color: rgb(15, 20, 25)"] {
     background-color: var(--xdm-bg-hover) !important;
+  }
+  /* Modal dialogs (post composer, etc.) — class-based dark bg */
+  html.${DIM_CLASS} [role="dialog"][aria-modal="true"] {
+    background-color: var(--xdm-bg) !important;
   }
   html.${DIM_CLASS} [role="link"] > div > div:first-child div:has(> svg:only-child) {
     background-color: var(--xdm-bg-elevated) !important;
@@ -317,9 +323,17 @@ function dimSubtree(root) {
   }
 }
 
+function shouldUseComputedBg(el) {
+  if (el.classList.contains("jf-element")) return true;
+  // Dialogs / modals frequently use class-based backgrounds (no inline style)
+  if (el.matches?.('[role="dialog"], [aria-modal="true"], [data-testid="DMDrawer"], [data-testid="sheetDialog"]')) return true;
+  if (el.closest?.('[role="dialog"], [aria-modal="true"]')) return true;
+  return false;
+}
+
 function dimElement(el) {
   if (!el || el.nodeType !== 1 || el.classList.contains("xdm-dimmed") || el.classList.contains("xdm-dimmed-elevated")) return;
-  const bg = el.classList.contains("jf-element")
+  const bg = shouldUseComputedBg(el)
     ? (() => { try { return getComputedStyle(el).backgroundColor; } catch { return ""; } })()
     : el.style.backgroundColor;
   if (bg === "rgb(0, 0, 0)" || bg === "rgba(0, 0, 0, 1)") {

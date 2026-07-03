@@ -8,17 +8,23 @@ function switchToPage(page) {
   if (!btn) return;
   btn.classList.add("active");
   document.getElementById("page-" + page).classList.add("active");
-  if (page === "cookies") loadCookies();
-  if (page === "redirects") loadRedirects();
-  if (page === "darkmode") loadDarkMode();
-  if (page === "xdim") loadXDim();
-  if (page === "jstoggle") loadJsToggle();
-  if (page === "nocookie") loadNoCookie();
-  if (page === "livecss") loadLiveCSS();
-  if (page === "unhook") loadUnhook();
-  if (page === "xunhook") loadXUnhook();
-  if (page === "jsonformat") loadJsonFormat();
-  if (page === "music") { loadMusicHistory(); loadAcrFields(); }
+  // Defer the data-loading work so the page swap paints first
+  const load = () => {
+    if (page === "cookies") loadCookies();
+    else if (page === "redirects") loadRedirects();
+    else if (page === "darkmode") loadDarkMode();
+    else if (page === "xdim") loadXDim();
+    else if (page === "jstoggle") loadJsToggle();
+    else if (page === "nocookie") loadNoCookie();
+    else if (page === "livecss") loadLiveCSS();
+    else if (page === "unhook") loadUnhook();
+    else if (page === "xunhook") loadXUnhook();
+    else if (page === "xreply") loadXReply();
+    else if (page === "jsonformat") loadJsonFormat();
+    else if (page === "music") { loadMusicHistory(); loadAcrFields(); }
+  };
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(load);
+  else setTimeout(load, 0);
   chrome.storage.local.set({ last_tab: page });
 }
 
@@ -26,9 +32,11 @@ document.querySelectorAll(".nav button").forEach((btn) => {
   btn.addEventListener("click", () => switchToPage(btn.dataset.page));
 });
 
-// Restore last open tab
-chrome.storage.local.get(["last_tab"], (data) => {
-  if (data.last_tab) switchToPage(data.last_tab);
+// Restore last open tab — deferred so the default page paints first
+requestAnimationFrame(() => {
+  chrome.storage.local.get(["last_tab"], (data) => {
+    if (data.last_tab) switchToPage(data.last_tab);
+  });
 });
 
 // ═══════════════════════════════════
@@ -140,7 +148,8 @@ function timeAgo(ts) {
   return Math.floor(hrs / 24) + "d ago";
 }
 
-loadClosedTabs();
+// Defer closed-tab history (up to 50 favicon img loads) until after first paint
+requestAnimationFrame(loadClosedTabs);
 
 // ═══════════════════════════════════
 //  Cookie Editor
@@ -763,6 +772,35 @@ xunhookToggle.addEventListener("change", async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tab) {
     chrome.tabs.sendMessage(tab.id, { type: "xunhook_toggle", enabled }).catch(() => {});
+  }
+});
+
+// ═══════════════════════════════════
+//  X Reply Auto-Select
+// ═══════════════════════════════════
+const xreplyToggle = document.getElementById("xreplyToggle");
+const xreplyStatus = document.getElementById("xreplyStatus");
+
+async function loadXReply() {
+  const data = await chrome.storage.local.get(["xreply_enabled"]);
+  const enabled = data.xreply_enabled !== false;
+  xreplyToggle.checked = enabled;
+  updateXReplyUI(enabled);
+}
+
+function updateXReplyUI(on) {
+  xreplyStatus.textContent = on ? "ON" : "OFF";
+  xreplyStatus.className = "status " + (on ? "on" : "off");
+}
+
+xreplyToggle.addEventListener("change", async () => {
+  const enabled = xreplyToggle.checked;
+  updateXReplyUI(enabled);
+  await chrome.storage.local.set({ xreply_enabled: enabled });
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab) {
+    chrome.tabs.sendMessage(tab.id, { type: "xreply_toggle", enabled }).catch(() => {});
   }
 });
 
