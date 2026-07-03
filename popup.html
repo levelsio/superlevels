@@ -6,7 +6,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       width: 600px;
-      height: 500px;
+      height: 600px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: #1a1a2e;
       color: #e0e0e0;
@@ -354,6 +354,21 @@
       font-size: 12px; color: #aaa; min-width: 36px;
       text-align: right;
     }
+    .ai-result {
+      display: none; background: #16213e; border-radius: 8px;
+      padding: 12px; font-size: 13px; line-height: 1.5; color: #ddd;
+      white-space: normal; word-wrap: break-word;
+    }
+    .ai-result.show { display: block; }
+    .ai-result b { color: #fff; }
+    .ai-result ul { margin: 4px 0; padding-left: 18px; }
+    .ai-result li { margin: 3px 0; }
+    .ai-result .ai-err { color: #e94560; }
+    .ai-result .ai-copy {
+      float: right; background: none; border: none; color: #e94560;
+      font-size: 11px; cursor: pointer; margin: -4px -4px 0 0;
+    }
+    .ai-result .ai-spin { color: #888; }
     .dark-scope {
       display: flex; gap: 6px; margin-bottom: 10px;
     }
@@ -748,6 +763,7 @@
     <button data-page="livecss">🎨 CSS</button>
     <button data-page="unhook">📺 YT Unhook</button>
     <button data-page="music">🎵 Music</button>
+    <button data-page="summarize">✨ Summarize</button>
     <button data-page="pip">🖼 PiP</button>
     <button data-page="jsonformat">{} JSON</button>
   </div>
@@ -1081,6 +1097,47 @@
         <label>Access Secret</label>
         <input type="password" id="acrSecret" placeholder="your access secret" style="width:100%;padding:6px 8px;background:#0f1e3d;border:1px solid #2a2a4a;border-radius:4px;color:#ddd;font-size:12px;margin-bottom:6px;">
         <button class="btn-save" id="acrSaveBtn" style="margin-top:4px;padding:6px 14px;font-size:12px;">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ AI Summarize Page ═══ -->
+  <div class="page" id="page-summarize">
+    <div class="page-body">
+      <div class="dark-section">
+        <label>Provider</label>
+        <select id="aiProvider" style="width:100%;padding:6px 8px;background:#0f1e3d;border:1px solid #2a2a4a;border-radius:4px;color:#ddd;font-size:12px;">
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="xai">xAI (Grok)</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+        <select id="aiLength" style="flex-shrink:0;padding:6px 8px;background:#0f1e3d;border:1px solid #2a2a4a;border-radius:4px;color:#ddd;font-size:12px;">
+          <option value="brief">Brief</option>
+          <option value="bullets" selected>Bullets</option>
+          <option value="detailed">Detailed</option>
+        </select>
+        <button class="btn-save" id="summarizeBtn" style="flex:1;padding:8px;font-size:13px;">✨ Summarize this page</button>
+      </div>
+
+      <div class="ai-result" id="aiResult"></div>
+
+      <button id="aiSettingsBtn" style="background:none;border:none;color:#555;font-size:12px;cursor:pointer;margin-top:6px;">⚙️ API key & model</button>
+      <div class="dark-section" id="aiConfig" style="margin-top:8px;display:none">
+        <a id="aiSignupLink" href="#" target="_blank" style="display:block;text-align:center;padding:8px;margin-bottom:10px;background:#2a1525;border:1px solid #e94560;border-radius:6px;color:#e94560;font-size:12px;font-weight:600;text-decoration:none;">Get an API key →</a>
+        <label>API Key <span id="aiKeyHint" style="color:#555;"></span></label>
+        <input type="password" id="aiKey" placeholder="paste your key" style="width:100%;padding:6px 8px;background:#0f1e3d;border:1px solid #2a2a4a;border-radius:4px;color:#ddd;font-size:12px;margin-bottom:6px;">
+        <label>Model</label>
+        <input type="text" id="aiModel" placeholder="model name" style="width:100%;padding:6px 8px;background:#0f1e3d;border:1px solid #2a2a4a;border-radius:4px;color:#ddd;font-size:12px;margin-bottom:6px;">
+        <button class="btn-save" id="aiSaveBtn" style="margin-top:4px;padding:6px 14px;font-size:12px;">Save</button>
+        <div style="font-size:11px;color:#555;margin-top:8px;">Keys are stored locally in your browser and sent only to the provider you pick.</div>
+      </div>
+
+      <div class="xdim-note" style="margin-top:10px">
+        Reads the visible text of the current tab and<br>
+        summarizes it with your own AI provider key.
       </div>
     </div>
   </div>
