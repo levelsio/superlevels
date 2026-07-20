@@ -20,6 +20,17 @@
       /* Note: do NOT include <picture> here. <picture> wraps an <img> which is
          already re-inverted above; adding picture causes triple inversion and
          images render inverted/washed out (e.g. nos.nl tile images vanish). */
+      /* Reddit renders post video/images inside custom-element players that use
+         a shadow root (e.g. <shreddit-player-2>, <shreddit-player>). The page
+         invert reaches the shadow <video>, but the "video" re-invert selector
+         above can't cross the shadow boundary, so the video shows up inverted.
+         Re-invert the host element instead: that cancels the page invert for the
+         whole shadow subtree (video + controls) at once. */
+      html.superlevels-dark shreddit-player-2,
+      html.superlevels-dark shreddit-player,
+      html.superlevels-dark shreddit-media-player {
+        filter: invert(1) hue-rotate(180deg) !important;
+      }
       /* nos.nl article tiles put a dark gradient scrim over the image (behind the
          white title). The page invert turns that scrim white and washes out the
          image, so re-invert the scrim (invert twice = original) to keep it dark.
