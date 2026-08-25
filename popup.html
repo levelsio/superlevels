@@ -533,6 +533,9 @@
       color: #4caf50; font-size: 14px; flex-shrink: 0;
     }
     .unhook-feature.off .check { color: #555; }
+    .unhook-feature.clickable { cursor: pointer; user-select: none; }
+    .unhook-feature.clickable:hover { background: #1b2a52; }
+    .unhook-feature.clickable.off { color: #777; }
 
     /* ── JS Toggle ── */
     .js-big-toggle {
@@ -1021,15 +1024,15 @@
       </div>
 
       <div class="unhook-features" id="unhookFeatures">
-        <div class="unhook-feature"><span class="check">✓</span> Black homepage — no feed</div>
-        <div class="unhook-feature"><span class="check">✓</span> No sidebar suggestions</div>
-        <div class="unhook-feature"><span class="check">✓</span> No end screen overlays</div>
-        <div class="unhook-feature"><span class="check">✓</span> No Shorts shelves</div>
-        <div class="unhook-feature"><span class="check">✓</span> Wider video player</div>
+        <div class="unhook-feature clickable" data-feature="homepage"><span class="check">✓</span> Black homepage — no feed</div>
+        <div class="unhook-feature clickable" data-feature="sidebar"><span class="check">✓</span> No sidebar suggestions</div>
+        <div class="unhook-feature clickable" data-feature="endscreen"><span class="check">✓</span> No end screen overlays</div>
+        <div class="unhook-feature clickable" data-feature="shorts"><span class="check">✓</span> No Shorts shelves</div>
+        <div class="unhook-feature clickable" data-feature="wider"><span class="check">✓</span> Wider video player</div>
       </div>
 
       <div class="xdim-note" style="margin-top:10px">
-        Removes YouTube distractions.<br>
+        Click a feature to toggle it on/off.<br>
         Search still works — just no recommendations.
       </div>
     </div>
