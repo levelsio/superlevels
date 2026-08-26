@@ -44,14 +44,42 @@ chrome.alarms.create("tabCleanup", { periodInMinutes: CHECK_INTERVAL_MIN });
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== "tabCleanup") return;
 
-  const { exclusions = [], enabled = true, timeoutMin = DEFAULT_TIMEOUT_MIN } =
-    await chrome.storage.local.get(["exclusions", "enabled", "timeoutMin"]);
+  const {
+    exclusions = [],
+    enabled = true,
+    timeoutMin = DEFAULT_TIMEOUT_MIN,
+    excludeAllGroups = false,
+    excludedGroupTitles = [],
+  } = await chrome.storage.local.get([
+    "exclusions",
+    "enabled",
+    "timeoutMin",
+    "excludeAllGroups",
+    "excludedGroupTitles",
+  ]);
 
   if (!enabled) return;
 
   const now = Date.now();
   const timeoutMs = timeoutMin * 60 * 1000;
   const tabs = await chrome.tabs.query({});
+
+  // Resolve titles for any groups containing tabs (only when needed)
+  const groupTitleById = {};
+  if (excludeAllGroups || excludedGroupTitles.length) {
+    const groupIds = new Set();
+    for (const tab of tabs) {
+      if (typeof tab.groupId === "number" && tab.groupId !== -1) {
+        groupIds.add(tab.groupId);
+      }
+    }
+    for (const gid of groupIds) {
+      try {
+        const g = await chrome.tabGroups.get(gid);
+        groupTitleById[gid] = g.title || "";
+      } catch {}
+    }
+  }
 
   // Never close the last tab in a window
   const windowTabCounts = {};
@@ -95,6 +123,15 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
           continue;
         }
       } catch {}
+    }
+
+    // Skip tabs in excluded groups
+    if (typeof tab.groupId === "number" && tab.groupId !== -1) {
+      if (excludeAllGroups) continue;
+      const title = groupTitleById[tab.groupId];
+      if (title !== undefined && excludedGroupTitles.includes(title)) {
+        continue;
+      }
     }
 
     // Check inactivity
@@ -213,13 +250,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // Set defaults on install
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.local.get(["enabled", "timeoutMin", "exclusions"], (data) => {
-    const defaults = {};
-    if (data.enabled === undefined) defaults.enabled = true;
-    if (data.timeoutMin === undefined) defaults.timeoutMin = DEFAULT_TIMEOUT_MIN;
-    if (data.exclusions === undefined) defaults.exclusions = [];
-    if (Object.keys(defaults).length) {
-      chrome.storage.local.set(defaults);
+  chrome.storage.local.get(
+    ["enabled", "timeoutMin", "exclusions", "excludeAllGroups", "excludedGroupTitles"],
+    (data) => {
+      const defaults = {};
+      if (data.enabled === undefined) defaults.enabled = true;
+      if (data.timeoutMin === undefined) defaults.timeoutMin = DEFAULT_TIMEOUT_MIN;
+      if (data.exclusions === undefined) defaults.exclusions = [];
+      if (data.excludeAllGroups === undefined) defaults.excludeAllGroups = false;
+      if (data.excludedGroupTitles === undefined) defaults.excludedGroupTitles = [];
+      if (Object.keys(defaults).length) {
+        chrome.storage.local.set(defaults);
+      }
     }
-  });
+  );
 });
