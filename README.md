@@ -57,6 +57,9 @@ Removes YouTube distractions: no homepage feed, no sidebar suggestions, no end s
 ### 🫛 Photopea No Ads
 Hides the 320px ad column on [photopea.com](https://www.photopea.com) and expands the editor to the full window width (Photopea sizes the editor from `window.innerWidth - 320`, so a main-world script reports the window as 320px wider). Toggle in the popup.
 
+### 🗄 No Paywall
+Opens paywalled news articles straight on [archive.is](https://archive.is) — e.g. an nytimes.com article goes to `archive.is/https://www.nytimes.com/...`. Only article URLs redirect (homepages and section fronts don't), tracking params are stripped so existing snapshots match, and links clicked from an archive page open the original. The site list (NYT, WSJ, FT, Bloomberg, Economist, plus Dutch, German, French, Italian, Spanish and Nordic papers like NRC, Volkskrant, Spiegel, Zeit, Le Monde, Corriere, El País) is editable in the popup.
+
 ### 🎵 Music Recognizer
 Shazam-like music identification for any tab. Captures 10 seconds of audio and identifies the song via [ACRCloud](https://www.acrcloud.com/sign-up/) (free signup, bring your own API key). Results link to YouTube. History of recognized songs.
 

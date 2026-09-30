@@ -762,6 +762,7 @@
     <button data-page="xunhook">𝕏 Unhook</button>
     <button data-page="xreply">𝕏 Reply</button>
     <button data-page="photopea">🫛 Photopea</button>
+    <button data-page="archive">🗄 No paywall</button>
     <button data-page="jstoggle">⚡ JS</button>
     <button data-page="nocookie">🚫 Cookies=OK</button>
     <button data-page="livecss">🎨 CSS</button>
@@ -946,6 +947,29 @@
         Removes X / Twitter distractions.<br>
         Toggle off if a page breaks.
       </div>
+    </div>
+  </div>
+
+  <!-- ═══ No Paywall Page ═══ -->
+  <div class="page" id="page-archive">
+    <div class="page-body">
+      <div class="unhook-big-toggle">
+        <div class="yticon">🗄</div>
+        <label class="big-switch">
+          <input type="checkbox" id="archiveToggle" checked>
+          <span class="big-slider"></span>
+        </label>
+        <div class="status on" id="archiveStatus">ON</div>
+      </div>
+
+      <div class="unhook-features">
+        <div class="unhook-feature"><span class="check">✓</span> Articles on these sites open on archive.is</div>
+        <div class="unhook-feature"><span class="check">✓</span> Homepages and section fronts are left alone</div>
+        <div class="unhook-feature"><span class="check">✓</span> Links clicked from archive.is open the original</div>
+      </div>
+
+      <textarea class="livecss-editor" id="archiveSites" style="min-height:160px;margin-top:10px" spellcheck="false" placeholder="nytimes.com&#10;wsj.com"></textarea>
+      <div class="xdim-note" id="archiveNote">One domain per line (subdomains included). Saved automatically.</div>
     </div>
   </div>
 
