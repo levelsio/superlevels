@@ -246,9 +246,24 @@ function injectShadowCSS(root) {
   if (style.textContent !== css) style.textContent = css;
 }
 
+let _shadowRetryFrame = 0;
+let _shadowRetryUntil = 0;
+
 function scanShadowRoots() {
+  let waiting = false;
   for (const host of document.querySelectorAll('[data-testid="xchatEmbedRoute"]')) {
     if (host.shadowRoot) injectShadowCSS(host.shadowRoot);
+    else waiting = true;
+  }
+  // Host is in the DOM but its shadow root isn't attached yet: retry every frame
+  // (up to 3s) so Chat never paints black before we get in
+  if (waiting) {
+    if (!_shadowRetryUntil) _shadowRetryUntil = performance.now() + 3000;
+    if (performance.now() < _shadowRetryUntil && !_shadowRetryFrame) {
+      _shadowRetryFrame = requestAnimationFrame(() => { _shadowRetryFrame = 0; scanShadowRoots(); });
+    }
+  } else {
+    _shadowRetryUntil = 0;
   }
 }
 
@@ -441,7 +456,10 @@ function startObserver() {
         applyDim();
       }
       if (_enabled && document.documentElement.classList.contains(DIM_CLASS)) {
-        for (const m of mutations) { if (m.addedNodes.length) queueScan(m.addedNodes); }
+        let added = false;
+        for (const m of mutations) { if (m.addedNodes.length) { added = true; queueScan(m.addedNodes); } }
+        // Catch Chat's shadow host the moment it mounts instead of waiting for the poll
+        if (added) scanShadowRoots();
       }
       if (_enabled && document.body && !_bodyObserver) startBodyObserver();
     } catch {
