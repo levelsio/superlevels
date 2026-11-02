@@ -21,6 +21,7 @@ function switchToPage(page) {
     else if (page === "xunhook") loadXUnhook();
     else if (page === "xreply") loadXReply();
     else if (page === "photopea") loadPhotopea();
+    else if (page === "tiktok") loadTikTok();
     else if (page === "archive") loadArchive();
     else if (page === "jsonformat") loadJsonFormat();
     else if (page === "summarize") loadSummarize();
@@ -848,6 +849,35 @@ photopeaToggle.addEventListener("change", async () => {
   // The width fix runs at page load, so reload any open Photopea tabs
   const tabs = await chrome.tabs.query({ url: ["*://www.photopea.com/*", "*://photopea.com/*"] });
   for (const tab of tabs) chrome.tabs.reload(tab.id).catch(() => {});
+});
+
+// ═══════════════════════════════════
+//  TikTok Login Skipper
+// ═══════════════════════════════════
+const tiktokToggle = document.getElementById("tiktokToggle");
+const tiktokStatus = document.getElementById("tiktokStatus");
+
+async function loadTikTok() {
+  const data = await chrome.storage.local.get(["tiktok_enabled"]);
+  const enabled = data.tiktok_enabled !== false;
+  tiktokToggle.checked = enabled;
+  updateTikTokUI(enabled);
+}
+
+function updateTikTokUI(on) {
+  tiktokStatus.textContent = on ? "ON" : "OFF";
+  tiktokStatus.className = "status " + (on ? "on" : "off");
+}
+
+tiktokToggle.addEventListener("change", async () => {
+  const enabled = tiktokToggle.checked;
+  updateTikTokUI(enabled);
+  await chrome.storage.local.set({ tiktok_enabled: enabled });
+
+  const tabs = await chrome.tabs.query({ url: ["*://www.tiktok.com/*", "*://tiktok.com/*"] });
+  for (const tab of tabs) {
+    chrome.tabs.sendMessage(tab.id, { type: "tiktok_toggle", enabled }).catch(() => {});
+  }
 });
 
 // ═══════════════════════════════════

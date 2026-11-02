@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "🚀 SuperLevels",
   "version": "2.0",
-  "description": "The super Chrome extension by @levelsio — dark mode, GDPR cookie dismisser, YouTube unhook, tab cleaner, cookie editor, redirect tracer, live CSS editor, X/Twitter dim mode, JS toggle, JSON formatter, music recognizer, picture-in-picture, Google Maps links, view image, Photopea ad remover, and archive.is auto-redirect for paywalled articles.",
+  "description": "The super Chrome extension by @levelsio — dark mode, GDPR cookie dismisser, YouTube unhook, tab cleaner, cookie editor, redirect tracer, live CSS editor, X/Twitter dim mode, JS toggle, JSON formatter, music recognizer, picture-in-picture, Google Maps links, view image, Photopea ad remover, TikTok login skipper, and archive.is auto-redirect for paywalled articles.",
   "permissions": ["tabs", "storage", "alarms", "cookies", "activeTab", "webRequest", "webNavigation", "tabCapture", "contentSettings", "scripting"],
   "host_permissions": ["<all_urls>"],
   "background": {
@@ -31,6 +31,10 @@
   }, {
     "matches": ["*://www.photopea.com/*", "*://photopea.com/*"],
     "js": ["photopea.js"],
+    "run_at": "document_start"
+  }, {
+    "matches": ["*://www.tiktok.com/*", "*://tiktok.com/*"],
+    "js": ["tiktok.js"],
     "run_at": "document_start"
   }, {
     "matches": ["*://www.google.com/*", "*://www.google.co.uk/*", "*://www.google.co.jp/*", "*://www.google.co.in/*", "*://www.google.co.kr/*", "*://www.google.co.id/*", "*://www.google.com.br/*", "*://www.google.com.au/*", "*://www.google.com.mx/*", "*://www.google.de/*", "*://www.google.fr/*", "*://www.google.es/*", "*://www.google.it/*", "*://www.google.nl/*", "*://www.google.pt/*", "*://www.google.pl/*", "*://www.google.se/*", "*://www.google.ca/*", "*://www.google.ru/*"],

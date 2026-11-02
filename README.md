@@ -57,6 +57,9 @@ Removes YouTube distractions: no homepage feed, no sidebar suggestions, no end s
 ### 🫛 Photopea No Ads
 Hides the 320px ad column on [photopea.com](https://www.photopea.com) and expands the editor to the full window width (Photopea sizes the editor from `window.innerWidth - 320`, so a main-world script reports the window as 320px wider). Toggle in the popup.
 
+### 🎶 TikTok Login Skipper
+Gets rid of TikTok's "Log in to TikTok" popup that covers videos, dims the page and blocks clicks/scrolling for logged-out visitors. The modal is hidden instantly with CSS and its Skip button is clicked — but Skip only swaps in a "When's your birthday?" step that keeps the page locked, so the extension also undoes the locks TikTok applies while the modal is open: the `inert` attribute on `#app`, `#app { pointer-events: none }`, and the modal's focus lock. Clicking TikTok's own Log in button still opens the popup normally. Toggle in the popup.
+
 ### 🗄 No Paywall
 Opens paywalled news articles straight on [archive.is](https://archive.is) — e.g. an nytimes.com article goes to `archive.is/https://www.nytimes.com/...`. Only article URLs redirect (homepages and section fronts don't), tracking params are stripped so existing snapshots match, and links clicked from an archive page open the original. The site list (NYT, WSJ, FT, Bloomberg, Economist, plus Dutch, German, French, Italian, Spanish and Nordic papers like NRC, Volkskrant, Spiegel, Zeit, Le Monde, Corriere, El País) is editable in the popup.
 
