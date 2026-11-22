@@ -1588,6 +1588,31 @@ function fmtInline(s) {
 }
 
 // ═══════════════════════════════════
+//  Full-page Screenshot
+// ═══════════════════════════════════
+// The capture itself runs in screenshot.html, opened as a background tab so the page
+// being captured stays in front while Chrome renders it.
+async function startFullPageShot(kind) {
+  const status = document.getElementById("shotStatus");
+  status.className = "pip-status";
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !/^(https?|file):/.test(tab.url || "")) {
+    status.className = "pip-status err";
+    status.textContent = "Open a normal website tab first.";
+    return;
+  }
+  status.textContent = "Capturing…";
+  await chrome.tabs.create({
+    url: chrome.runtime.getURL(`screenshot.html?tab=${tab.id}&kind=${kind}`),
+    index: tab.index + 1,
+    openerTabId: tab.id,
+    active: false,
+  });
+}
+document.getElementById("shotPngBtn").addEventListener("click", () => startFullPageShot("png"));
+document.getElementById("shotPdfBtn").addEventListener("click", () => startFullPageShot("pdf"));
+
+// ═══════════════════════════════════
 //  Helpers
 // ═══════════════════════════════════
 function esc(s) {

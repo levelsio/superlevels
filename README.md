@@ -69,6 +69,9 @@ Shazam-like music identification for any tab. Captures 10 seconds of audio and i
 ### 🖼 Picture-in-Picture
 Pop the largest video on the current tab into a floating PiP window with one click.
 
+### 📸 Full-page Screenshot
+Capture the whole page, top to bottom, in one clean PNG. It's handy for saving articles and receipts. It scrolls through the page first so lazy-loaded images show up, then captures through Chrome's debugger, so fixed headers appear once instead of on every screen. Opens a preview with Save and Copy buttons and saves it to your Downloads. Can also save as a PDF with selectable text.
+
 ### 🗺 Google Maps Links
 Re-adds clickable Maps links and map preview cards to Google Search results.
 

@@ -772,6 +772,7 @@
     <button data-page="music">🎵 Music</button>
     <button data-page="summarize">✨ Summarize</button>
     <button data-page="pip">🖼 PiP</button>
+    <button data-page="screenshot">📸 Screenshot</button>
     <button data-page="jsonformat">{} JSON</button>
   </div>
 
@@ -1266,6 +1267,23 @@
       <div class="xdim-note" style="margin-top:10px">
         Pops the largest video on the current tab<br>
         into a floating window. Click again to exit.
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Full-page Screenshot Page ═══ -->
+  <div class="page" id="page-screenshot">
+    <div class="page-body">
+      <div class="pip-center">
+        <div class="pip-icon">📸</div>
+        <button class="btn-save" id="shotPngBtn" style="padding:10px 18px;font-size:14px;">Capture full page (PNG)</button>
+        <button id="shotPdfBtn" style="background:none;border:none;color:#888;font-size:12px;cursor:pointer;text-decoration:underline;">or save as PDF (selectable text)</button>
+        <div class="pip-status" id="shotStatus"></div>
+      </div>
+      <div class="xdim-note" style="margin-top:10px">
+        Captures the whole page top to bottom in one image, using<br>
+        Chrome's debugger. Chrome shows a "started debugging" bar<br>
+        for a moment while it works. Opens a preview and saves it.
       </div>
     </div>
   </div>
