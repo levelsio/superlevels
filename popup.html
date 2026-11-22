@@ -1216,6 +1216,7 @@
           <option value="openai">OpenAI</option>
           <option value="anthropic">Anthropic (Claude)</option>
           <option value="xai">xAI (Grok)</option>
+          <option value="ollama">Ollama (local)</option>
         </select>
       </div>
 
@@ -1233,8 +1234,15 @@
       <button id="aiSettingsBtn" style="background:none;border:none;color:#555;font-size:12px;cursor:pointer;margin-top:6px;">⚙️ API key & model</button>
       <div class="dark-section" id="aiConfig" style="margin-top:8px;display:none">
         <a id="aiSignupLink" href="#" target="_blank" style="display:block;text-align:center;padding:8px;margin-bottom:10px;background:#2a1525;border:1px solid #e94560;border-radius:6px;color:#e94560;font-size:12px;font-weight:600;text-decoration:none;">Get an API key →</a>
-        <label>API Key <span id="aiKeyHint" style="color:#555;"></span></label>
-        <input type="password" id="aiKey" placeholder="paste your key" style="width:100%;padding:6px 8px;background:#0f1e3d;border:1px solid #2a2a4a;border-radius:4px;color:#ddd;font-size:12px;margin-bottom:6px;">
+        <div id="aiKeyRow">
+          <label>API Key <span id="aiKeyHint" style="color:#555;"></span></label>
+          <input type="password" id="aiKey" placeholder="paste your key" style="width:100%;padding:6px 8px;background:#0f1e3d;border:1px solid #2a2a4a;border-radius:4px;color:#ddd;font-size:12px;margin-bottom:6px;">
+        </div>
+        <div id="aiUrlRow" style="display:none">
+          <label>Server URL</label>
+          <input type="text" id="aiUrl" placeholder="http://localhost:11434" style="width:100%;padding:6px 8px;background:#0f1e3d;border:1px solid #2a2a4a;border-radius:4px;color:#ddd;font-size:12px;margin-bottom:6px;">
+          <div style="font-size:11px;color:#555;margin-bottom:6px;">Start Ollama with <code>OLLAMA_ORIGINS=chrome-extension://*</code> so it accepts requests from this extension.</div>
+        </div>
         <label>Model</label>
         <input type="text" id="aiModel" placeholder="model name" style="width:100%;padding:6px 8px;background:#0f1e3d;border:1px solid #2a2a4a;border-radius:4px;color:#ddd;font-size:12px;margin-bottom:6px;">
         <button class="btn-save" id="aiSaveBtn" style="margin-top:4px;padding:6px 14px;font-size:12px;">Save</button>
@@ -1243,7 +1251,8 @@
 
       <div class="xdim-note" style="margin-top:10px">
         Reads the visible text of the current tab and<br>
-        summarizes it with your own AI provider key.
+        summarizes it with your own AI provider key<br>
+        or a local Ollama model.
       </div>
     </div>
   </div>

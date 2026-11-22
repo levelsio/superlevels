@@ -1383,7 +1383,23 @@ const AI_PROVIDERS = {
     signup: "https://console.x.ai/",
     keyHint: "(xai-...)",
   },
+  ollama: {
+    label: "Ollama",
+    // Blank = use the first model installed on the Ollama server
+    defaultModel: "",
+    signup: "https://ollama.com/download",
+    local: true,
+  },
 };
+
+const OLLAMA_DEFAULT_URL = "http://localhost:11434";
+
+// Normalize a user-entered Ollama server address: add http:// if missing, drop trailing slashes
+function normalizeOllamaUrl(raw) {
+  let url = (raw || "").trim() || OLLAMA_DEFAULT_URL;
+  if (!/^https?:\/\//i.test(url)) url = `http://${url}`;
+  return url.replace(/\/+$/, "");
+}
 
 const LENGTH_PROMPTS = {
   brief: "Summarize it in 3-4 clear sentences.",
@@ -1398,6 +1414,9 @@ const aiModelEl = document.getElementById("aiModel");
 const aiResultEl = document.getElementById("aiResult");
 const aiConfigEl = document.getElementById("aiConfig");
 const summarizeBtn = document.getElementById("summarizeBtn");
+const aiUrlEl = document.getElementById("aiUrl");
+const aiKeyRowEl = document.getElementById("aiKeyRow");
+const aiUrlRowEl = document.getElementById("aiUrlRow");
 
 function loadSummarize() {
   chrome.storage.local.get(["ai_provider", "ai_length"], (data) => {
@@ -1412,15 +1431,22 @@ function refreshAiProviderFields() {
   const provider = aiProviderEl.value;
   const cfg = AI_PROVIDERS[provider];
   chrome.storage.local.get(
-    [`ai_key_${provider}`, `ai_model_${provider}`],
+    [`ai_key_${provider}`, `ai_model_${provider}`, "ai_url_ollama"],
     (data) => {
       const key = data[`ai_key_${provider}`] || "";
       aiKeyEl.value = key;
       aiModelEl.value = data[`ai_model_${provider}`] || cfg.defaultModel;
-      document.getElementById("aiSignupLink").href = cfg.signup;
-      document.getElementById("aiKeyHint").textContent = cfg.keyHint;
-      // Auto-open config if no key saved for this provider yet
-      aiConfigEl.style.display = key ? "none" : "block";
+      aiUrlEl.value = data.ai_url_ollama || OLLAMA_DEFAULT_URL;
+      const signup = document.getElementById("aiSignupLink");
+      signup.href = cfg.signup;
+      signup.textContent = cfg.local ? "Get Ollama →" : "Get an API key →";
+      document.getElementById("aiKeyHint").textContent = cfg.keyHint || "";
+      document.getElementById("aiSettingsBtn").textContent = cfg.local ? "⚙️ Server & model" : "⚙️ API key & model";
+      document.getElementById("aiModel").placeholder = cfg.local ? "blank = first installed model" : "model name";
+      aiKeyRowEl.style.display = cfg.local ? "none" : "block";
+      aiUrlRowEl.style.display = cfg.local ? "block" : "none";
+      // Auto-open config if no key saved for this provider yet (Ollama needs no key)
+      aiConfigEl.style.display = key || cfg.local ? "none" : "block";
     }
   );
 }
@@ -1441,15 +1467,14 @@ document.getElementById("aiSettingsBtn").addEventListener("click", () => {
 document.getElementById("aiSaveBtn").addEventListener("click", () => {
   const provider = aiProviderEl.value;
   const cfg = AI_PROVIDERS[provider];
-  chrome.storage.local.set(
-    {
-      [`ai_key_${provider}`]: aiKeyEl.value.trim(),
-      [`ai_model_${provider}`]: aiModelEl.value.trim() || cfg.defaultModel,
-    },
-    () => {
-      aiConfigEl.style.display = "none";
-    }
-  );
+  const values = cfg.local
+    ? { ai_url_ollama: normalizeOllamaUrl(aiUrlEl.value) }
+    : { [`ai_key_${provider}`]: aiKeyEl.value.trim() };
+  values[`ai_model_${provider}`] = aiModelEl.value.trim() || cfg.defaultModel;
+  if (cfg.local) aiUrlEl.value = values.ai_url_ollama;
+  chrome.storage.local.set(values, () => {
+    aiConfigEl.style.display = "none";
+  });
 });
 
 function showAiResult(html, cls) {
@@ -1467,7 +1492,8 @@ function extractPageText() {
 summarizeBtn.addEventListener("click", async () => {
   const provider = aiProviderEl.value;
   const cfg = AI_PROVIDERS[provider];
-  const key = aiKeyEl.value.trim();
+  // For Ollama the "key" slot carries the server URL
+  const key = cfg.local ? normalizeOllamaUrl(aiUrlEl.value) : aiKeyEl.value.trim();
   const model = aiModelEl.value.trim() || cfg.defaultModel;
 
   if (!key) {
@@ -1508,8 +1534,69 @@ summarizeBtn.addEventListener("click", async () => {
   }
 });
 
+// Talk to an Ollama server (local or on your network). `baseUrl` is the server address.
+async function callOllama(baseUrl, model, system, user) {
+  const base = normalizeOllamaUrl(baseUrl);
+  const corsHelp =
+    "Ollama blocked the request from this extension. Allow it by setting " +
+    "OLLAMA_ORIGINS=chrome-extension://* on the Ollama server, then restart Ollama.";
+  const connectHelp = `Ollama: can't reach ${base}. Is Ollama running?`;
+
+  const req = async (path, init) => {
+    let res;
+    try {
+      res = await fetch(`${base}${path}`, init);
+    } catch {
+      throw new Error(connectHelp);
+    }
+    if (res.status === 403) throw new Error(corsHelp);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(`Ollama: ${data?.error || `HTTP ${res.status}`}`);
+    return data;
+  };
+
+  // No model chosen: use the first installed model that can chat (skip embedding-only models).
+  // Older Ollama versions don't report capabilities, so a missing list counts as chat-capable.
+  if (!model) {
+    const tags = await req("/api/tags");
+    for (const m of tags.models || []) {
+      const info = await req("/api/show", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: m.name }),
+      }).catch(() => ({}));
+      if (!info.capabilities || info.capabilities.includes("completion")) {
+        model = m.name;
+        break;
+      }
+    }
+    if (!model) throw new Error("Ollama: no chat models installed. Run `ollama pull <model>` first.");
+  }
+
+  const data = await req("/api/chat", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      // The page text can be ~20k chars; Ollama's default context window is smaller and
+      // would silently cut off the start of the prompt (including the instructions)
+      options: { num_ctx: 8192 },
+    }),
+  });
+  const text = data.message?.content || "";
+  if (!text) throw new Error("Empty response from provider.");
+  return text.trim();
+}
+
 // Dispatch to the right provider API. Returns the summary text.
 async function callAiProvider(provider, model, key, system, user) {
+  if (provider === "ollama") return callOllama(key, model, system, user);
+
   let url, headers, body, pick;
 
   if (provider === "anthropic") {
