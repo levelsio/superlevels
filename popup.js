@@ -1555,38 +1555,58 @@ async function callOllama(baseUrl, model, system, user) {
     return data;
   };
 
-  // No model chosen: use the first installed model that can chat (skip embedding-only models).
-  // Older Ollama versions don't report capabilities, so a missing list counts as chat-capable.
+  const post = (path, payload) =>
+    req(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  // Models currently in memory, with the context size each was loaded with
+  const loadedModels = async () => (await req("/api/ps").catch(() => ({}))).models || [];
+
+  // No model chosen: use the first model that can chat (skip embedding-only models), trying
+  // models already in memory first so nothing new has to load. Older Ollama versions don't
+  // report capabilities, so a missing list counts as chat-capable.
   if (!model) {
-    const tags = await req("/api/tags");
-    for (const m of tags.models || []) {
-      const info = await req("/api/show", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ model: m.name }),
-      }).catch(() => ({}));
+    const names = (await loadedModels()).map((m) => m.name);
+    for (const m of (await req("/api/tags")).models || []) {
+      if (!names.includes(m.name)) names.push(m.name);
+    }
+    for (const name of names) {
+      const info = await post("/api/show", { model: name }).catch(() => ({}));
       if (!info.capabilities || info.capabilities.includes("completion")) {
-        model = m.name;
+        model = name;
         break;
       }
     }
     if (!model) throw new Error("Ollama: no chat models installed. Run `ollama pull <model>` first.");
   }
 
-  const data = await req("/api/chat", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      model,
-      stream: false,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      // The page text can be ~20k chars; Ollama's default context window is smaller and
-      // would silently cut off the start of the prompt (including the instructions)
-      options: { num_ctx: 8192 },
-    }),
+  // Pick the context size. Ollama reloads a model whenever a request asks for a different
+  // num_ctx than the one it is loaded with, which would evict a copy other apps rely on and
+  // ignore a server-wide OLLAMA_CONTEXT_LENGTH. So reuse the size the model is loaded with;
+  // if it isn't loaded, load it with the server's defaults first and read that size back.
+  // Ask for more only when that is below MIN_CTX: the page text (~20k chars) wouldn't fit
+  // and Ollama would silently cut off the start of the prompt, instructions included.
+  const MIN_CTX = 8192;
+  const loadedCtx = async () => {
+    const m = (await loadedModels()).find((x) => x.name === model || x.name === `${model}:latest`);
+    return m?.context_length || 0;
+  };
+  let ctx = await loadedCtx();
+  if (!ctx) {
+    await post("/api/generate", { model }); // no prompt = just load the model
+    ctx = await loadedCtx();
+  }
+
+  const data = await post("/api/chat", {
+    model,
+    stream: false,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    options: { num_ctx: Math.max(ctx, MIN_CTX) },
   });
   const text = data.message?.content || "";
   if (!text) throw new Error("Empty response from provider.");
