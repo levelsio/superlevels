@@ -4,6 +4,8 @@
 const params = new URLSearchParams(location.search);
 const tabId = Number(params.get("tab"));
 const kind = params.get("kind") === "pdf" ? "pdf" : "png";
+// element=1: capture only the element the picker marked with data-sl-shot="pick"
+const elementMode = params.get("element") === "1";
 
 const statusEl = document.getElementById("status");
 const titleEl = document.getElementById("title");
@@ -197,6 +199,23 @@ const PREPARE_PAGE = `(async () => {
   return { innerPanel: !!scroller };
 })()`;
 
+// Finds the element the picker marked, returns its box in page (document) coordinates
+// and removes the mark. Then scrolls to the top (put back by RESTORE_PAGE): when the page
+// is left scrolled, Chrome can repeat tiles for the part of the clip below the screen.
+const ELEMENT_BOX = `(async () => {
+  const el = document.querySelector('[data-sl-shot="pick"]');
+  if (!el) return null;
+  el.removeAttribute("data-sl-shot");
+  const r = el.getBoundingClientRect();
+  const x = Math.max(0, Math.floor(r.left + scrollX)), y = Math.max(0, Math.floor(r.top + scrollY));
+  const box = { x, y, width: Math.ceil(r.right + scrollX) - x, height: Math.ceil(r.bottom + scrollY) - y };
+  window.__slShotRestore = { x: scrollX, y: scrollY, styles: [], scroller: null, scrollerTop: 0 };
+  scrollTo(0, 0);
+  // Same settle time as the full-page path; two animation frames were not enough
+  await new Promise((res) => setTimeout(res, 400));
+  return box;
+})()`;
+
 const RESTORE_PAGE = `(() => {
   const s = window.__slShotRestore;
   if (!s) return;
@@ -213,7 +232,7 @@ async function capture() {
   if (!/^(https?|file):/.test(tab.url || "")) {
     throw new Error("Chrome doesn't allow capturing this kind of page. Open a normal website tab.");
   }
-  fileName = makeFileName(tab.title, kind);
+  fileName = makeFileName(elementMode ? `${tab.title || "page"} (part)` : tab.title, kind);
 
   const target = { tabId };
   const send = (method, args) => chrome.debugger.sendCommand(target, method, args);
@@ -224,8 +243,15 @@ async function capture() {
   }
 
   try {
-    setStatus("Loading the whole page…");
-    await send("Runtime.evaluate", { expression: PREPARE_PAGE, awaitPromise: true, returnByValue: true });
+    let region = null;
+    if (elementMode) {
+      // No lazy-load pass or panel unlocking: those could move the element
+      region = (await send("Runtime.evaluate", { expression: ELEMENT_BOX, awaitPromise: true, returnByValue: true })).result.value;
+      if (!region || region.width < 1 || region.height < 1) throw new Error("The picked element is gone or has no size.");
+    } else {
+      setStatus("Loading the whole page…");
+      await send("Runtime.evaluate", { expression: PREPARE_PAGE, awaitPromise: true, returnByValue: true });
+    }
 
     if (kind === "pdf") {
       setStatus("Making the PDF…");
@@ -234,10 +260,13 @@ async function capture() {
       return {};
     }
 
-    const metrics = await send("Page.getLayoutMetrics");
-    const size = metrics.cssContentSize || metrics.contentSize;
-    const cssW = Math.ceil(size.width);
-    const cssH = Math.ceil(size.height);
+    if (!region) {
+      const metrics = await send("Page.getLayoutMetrics");
+      const size = metrics.cssContentSize || metrics.contentSize;
+      region = { x: 0, y: 0, width: Math.ceil(size.width), height: Math.ceil(size.height) };
+    }
+    const cssW = region.width;
+    const cssH = region.height;
     const dpr = (await send("Runtime.evaluate", { expression: "devicePixelRatio", returnByValue: true })).result.value || 1;
 
     // Retina sharpness unless the image would be huge; then 1x; then smaller still
@@ -258,7 +287,7 @@ async function capture() {
       const { data } = await send("Page.captureScreenshot", {
         format: "png",
         captureBeyondViewport: true,
-        clip: { x: 0, y, width: cssW, height: h, scale },
+        clip: { x: region.x, y: region.y + y, width: cssW, height: h, scale },
       });
       const bmp = await createImageBitmap(new Blob([b64ToBytes(data)], { type: "image/png" }));
       if (!png) png = new PngStream(outW);

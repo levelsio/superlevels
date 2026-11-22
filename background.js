@@ -366,3 +366,18 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   const clean = url.origin + url.pathname;
   chrome.tabs.update(details.tabId, { url: "https://archive.is/" + clean }).catch(() => {});
 });
+
+// ═══════════════════════════════════
+//  Element screenshot
+// ═══════════════════════════════════
+// The picker (injected by the popup) marks the clicked element and sends this; open the
+// preview in element mode next to the page, in the background so the page stays in front.
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  if (msg?.type !== "shot_element" || !sender.tab) return;
+  chrome.tabs.create({
+    url: chrome.runtime.getURL(`screenshot.html?tab=${sender.tab.id}&kind=png&element=1`),
+    index: sender.tab.index + 1,
+    openerTabId: sender.tab.id,
+    active: false,
+  });
+});
