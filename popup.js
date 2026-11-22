@@ -1588,6 +1588,112 @@ function fmtInline(s) {
 }
 
 // ═══════════════════════════════════
+//  Full-page Screenshot
+// ═══════════════════════════════════
+// The capture itself runs in screenshot.html, opened as a background tab so the page
+// being captured stays in front while Chrome renders it.
+async function startFullPageShot(kind) {
+  const status = document.getElementById("shotStatus");
+  status.className = "pip-status";
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !/^(https?|file):/.test(tab.url || "")) {
+    status.className = "pip-status err";
+    status.textContent = "Open a normal website tab first.";
+    return;
+  }
+  status.textContent = "Capturing…";
+  await chrome.tabs.create({
+    url: chrome.runtime.getURL(`screenshot.html?tab=${tab.id}&kind=${kind}`),
+    index: tab.index + 1,
+    openerTabId: tab.id,
+    active: false,
+  });
+}
+document.getElementById("shotPngBtn").addEventListener("click", () => startFullPageShot("png"));
+document.getElementById("shotPdfBtn").addEventListener("click", () => startFullPageShot("pdf"));
+
+// Element capture: a picker runs in the page; clicking an element marks it and asks the
+// background to open the preview in element mode (the popup has closed by then).
+function elementPicker() {
+  if (window.__slPicker) return;
+  const box = document.createElement("div");
+  const tip = document.createElement("div");
+  box.style.cssText = "position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #e94560;background:rgba(233,69,96,0.12);border-radius:2px;transition:all 60ms;display:none";
+  tip.style.cssText = "position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;background:#16213e;color:#fff;font:13px -apple-system,system-ui,sans-serif;padding:8px 14px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.4)";
+  tip.textContent = "📸 Click an element to capture it · ↑ bigger · ↓ smaller · Esc cancels";
+  document.documentElement.append(box, tip);
+  let current = null;
+  const trail = []; // elements we went up from, for ↓
+  const show = (el) => {
+    current = el;
+    if (!el) { box.style.display = "none"; return; }
+    const r = el.getBoundingClientRect();
+    Object.assign(box.style, { display: "block", left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px" });
+  };
+  const onMove = (e) => {
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    if (!el || el === current || el === box || el === tip) return;
+    // After ↑, keep the bigger selection while the pointer stays inside it
+    if (trail.length && current && current.contains(el)) return;
+    trail.length = 0;
+    show(el);
+  };
+  const stop = (e) => { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); };
+  const cleanup = () => {
+    removeEventListener("mousemove", onMove, true);
+    removeEventListener("click", onClick, true);
+    removeEventListener("mousedown", stop, true);
+    removeEventListener("mouseup", stop, true);
+    removeEventListener("keydown", onKey, true);
+    removeEventListener("scroll", onScroll, true);
+    box.remove(); tip.remove();
+    delete window.__slPicker;
+  };
+  const onClick = (e) => {
+    stop(e);
+    const el = current;
+    cleanup();
+    if (!el) return;
+    el.setAttribute("data-sl-shot", "pick");
+    chrome.runtime.sendMessage({ type: "shot_element" });
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") { stop(e); cleanup(); }
+    else if (e.key === "ArrowUp" && current?.parentElement && current.parentElement !== document.documentElement) { stop(e); trail.push(current); show(current.parentElement); }
+    else if (e.key === "ArrowDown" && trail.length) { stop(e); show(trail.pop()); }
+  };
+  const onScroll = () => show(current);
+  addEventListener("mousemove", onMove, true);
+  addEventListener("click", onClick, true);
+  addEventListener("mousedown", stop, true);
+  addEventListener("mouseup", stop, true);
+  addEventListener("keydown", onKey, true);
+  addEventListener("scroll", onScroll, true);
+  window.__slPicker = true;
+}
+
+document.getElementById("shotPickBtn").addEventListener("click", async () => {
+  const status = document.getElementById("shotStatus");
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !/^(https?|file):/.test(tab.url || "")) {
+    status.className = "pip-status err";
+    status.textContent = "Open a normal website tab first.";
+    return;
+  }
+  try {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: elementPicker });
+  } catch (e) {
+    status.className = "pip-status err";
+    status.textContent = "Chrome doesn't allow this page to be captured.";
+    return;
+  }
+  // Close the popup so the page can be clicked (only when this is the real toolbar popup)
+  try {
+    if (chrome.extension.getViews({ type: "popup" }).includes(window)) window.close();
+  } catch {}
+});
+
+// ═══════════════════════════════════
 //  Helpers
 // ═══════════════════════════════════
 function esc(s) {
