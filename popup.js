@@ -1445,6 +1445,9 @@ function refreshAiProviderFields() {
       document.getElementById("aiModel").placeholder = cfg.local ? "blank = first installed model" : "model name";
       aiKeyRowEl.style.display = cfg.local ? "none" : "block";
       aiUrlRowEl.style.display = cfg.local ? "block" : "none";
+      document.getElementById("aiPrivacyNote").textContent = cfg.local
+        ? "Settings are stored locally in your browser. Page text is sent only to your Ollama server."
+        : "Keys are stored locally in your browser and sent only to the provider you pick.";
       // Auto-open config if no key saved for this provider yet (Ollama needs no key)
       aiConfigEl.style.display = key || cfg.local ? "none" : "block";
     }
