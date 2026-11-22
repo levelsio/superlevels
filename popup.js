@@ -1527,7 +1527,19 @@ summarizeBtn.addEventListener("click", async () => {
       `Summarize this web page. ${LENGTH_PROMPTS[aiLengthEl.value]}\n\n` +
       `Title: ${page.title}\nURL: ${page.url}\n\n${page.text}`;
 
-    const summary = await callAiProvider(provider, model, key, system, user);
+    // Show the summary as it is written (redrawn at most once per frame)
+    let pending = null;
+    const onDelta = (soFar) => {
+      if (pending === null) {
+        requestAnimationFrame(() => {
+          if (pending !== null) renderSummary(pending, true);
+          pending = null;
+        });
+      }
+      pending = soFar;
+    };
+    const summary = await callAiProvider(provider, model, key, system, user, onDelta);
+    pending = null;
     renderSummary(summary);
     chrome.storage.local.set({ ai_length: aiLengthEl.value });
   } catch (err) {
@@ -1538,7 +1550,7 @@ summarizeBtn.addEventListener("click", async () => {
 });
 
 // Talk to an Ollama server (local or on your network). `baseUrl` is the server address.
-async function callOllama(baseUrl, model, system, user) {
+async function callOllama(baseUrl, model, system, user, onDelta) {
   const base = normalizeOllamaUrl(baseUrl);
   const corsHelp =
     "Ollama blocked the request from this extension. Allow it by setting " +
@@ -1602,23 +1614,67 @@ async function callOllama(baseUrl, model, system, user) {
     ctx = await loadedCtx();
   }
 
-  const data = await post("/api/chat", {
+  const chat = {
     model,
-    stream: false,
+    stream: !!onDelta,
     messages: [
       { role: "system", content: system },
       { role: "user", content: user },
     ],
     options: { num_ctx: Math.max(ctx, MIN_CTX) },
-  });
-  const text = data.message?.content || "";
-  if (!text) throw new Error("Empty response from provider.");
+  };
+
+  let text = "";
+  if (!onDelta) {
+    text = (await post("/api/chat", chat)).message?.content || "";
+  } else {
+    // Streaming: Ollama sends one JSON object per line as the model writes
+    let res;
+    try {
+      res = await fetch(`${base}/api/chat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(chat),
+      });
+    } catch {
+      throw new Error(connectHelp);
+    }
+    if (res.status === 403) throw new Error(corsHelp);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(`Ollama: ${data?.error || `HTTP ${res.status}`}`);
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffered = "";
+    const handle = (line) => {
+      if (!line.trim()) return;
+      const msg = JSON.parse(line);
+      if (msg.error) throw new Error(`Ollama: ${msg.error}`);
+      const piece = msg.message?.content || "";
+      if (piece) {
+        text += piece;
+        onDelta(text);
+      }
+    };
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffered += decoder.decode(value, { stream: true });
+      const lines = buffered.split("\n");
+      buffered = lines.pop();
+      lines.forEach(handle);
+    }
+    handle(buffered + decoder.decode());
+  }
+  if (!text.trim()) throw new Error("Empty response from provider.");
   return text.trim();
 }
 
-// Dispatch to the right provider API. Returns the summary text.
-async function callAiProvider(provider, model, key, system, user) {
-  if (provider === "ollama") return callOllama(key, model, system, user);
+// Dispatch to the right provider API. Returns the summary text. `onDelta(textSoFar)` is
+// called as text arrives for providers that stream (currently Ollama).
+async function callAiProvider(provider, model, key, system, user, onDelta) {
+  if (provider === "ollama") return callOllama(key, model, system, user, onDelta);
 
   let url, headers, body, pick;
 
@@ -1666,8 +1722,9 @@ async function callAiProvider(provider, model, key, system, user) {
   return text.trim();
 }
 
-// Minimal safe markdown: escape, then **bold**, and '- ' bullet lists
-function renderSummary(text) {
+// Minimal safe markdown: escape, then **bold**, and '- ' bullet lists.
+// While `streaming`, the text is still arriving: no Copy button yet, and a cursor at the end.
+function renderSummary(text, streaming) {
   const lines = text.split("\n");
   let html = "";
   let inList = false;
@@ -1683,6 +1740,10 @@ function renderSummary(text) {
     }
   }
   if (inList) html += "</ul>";
+  if (streaming) {
+    showAiResult(`${html}<span class="ai-cursor">▍</span>`);
+    return;
+  }
   showAiResult(`<button class="ai-copy" id="aiCopyBtn">Copy</button>${html}`);
   document.getElementById("aiCopyBtn").addEventListener("click", () => {
     navigator.clipboard.writeText(text).then(() => {
