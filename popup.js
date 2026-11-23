@@ -1,106 +1,9 @@
 // ═══════════════════════════════════
-//  Mock Chrome extension APIs for local testing
-// ═══════════════════════════════════
-if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
-  window.chrome = {
-    storage: {
-      local: {
-        get: (keys, cb) => {
-          const mockData = {};
-          const getVal = (k) => {
-            const val = localStorage.getItem(k);
-            if (val === null) return undefined;
-            try { return JSON.parse(val); } catch { return val; }
-          };
-          if (Array.isArray(keys)) {
-            keys.forEach(k => { mockData[k] = getVal(k); });
-          } else if (typeof keys === "object") {
-            Object.keys(keys).forEach(k => {
-              const v = getVal(k);
-              mockData[k] = v !== undefined ? v : keys[k];
-            });
-          } else if (typeof keys === "string") {
-            mockData[keys] = getVal(keys);
-          }
-          setTimeout(() => cb(mockData), 0);
-        },
-        set: (items, cb) => {
-          Object.keys(items).forEach(k => {
-            localStorage.setItem(k, JSON.stringify(items[k]));
-          });
-          if (cb) setTimeout(cb, 0);
-        },
-        remove: (keys, cb) => {
-          if (Array.isArray(keys)) {
-            keys.forEach(k => localStorage.removeItem(k));
-          } else {
-            localStorage.removeItem(keys);
-          }
-          if (cb) setTimeout(cb, 0);
-        }
-      }
-    },
-    tabs: {
-      query: (queryInfo, cb) => {
-        setTimeout(() => cb([{ id: 1, url: "https://x.com/home" }]), 0);
-      },
-      sendMessage: (tabId, message, cb) => {
-        console.log("Mock sendMessage to tab", tabId, message);
-        if (cb) setTimeout(() => cb({ ok: true }), 0);
-        return Promise.resolve({ ok: true });
-      },
-      reload: (tabId) => {
-        console.log("Mock reload tab", tabId);
-      },
-      create: (createProperties) => {
-        console.log("Mock create tab", createProperties);
-        window.open(createProperties.url, "_blank");
-      }
-    },
-    cookies: {
-      getAll: (details, cb) => {
-        setTimeout(() => cb([
-          { name: "mock_cookie_1", value: "hello_cookie_val", domain: "x.com", path: "/", secure: true, httpOnly: false },
-          { name: "mock_cookie_2", value: "world_cookie_val", domain: "x.com", path: "/", secure: false, httpOnly: true }
-        ]), 0);
-      },
-      set: (details, cb) => {
-        console.log("Mock set cookie", details);
-        if (cb) setTimeout(() => cb(details), 0);
-      },
-      remove: (details, cb) => {
-        console.log("Mock remove cookie", details);
-        if (cb) setTimeout(() => cb(details), 0);
-      }
-    },
-    runtime: {
-      sendMessage: (message, cb) => {
-        console.log("Mock runtime sendMessage", message);
-        let resp = {};
-        if (message.type === "getRedirects") {
-          resp = { chain: [{ url: "http://t.co/xyz", statusCode: 301, redirectUrl: "https://x.com/home" }], finalUrl: "https://x.com/home", finalStatus: 200 };
-        }
-        if (cb) setTimeout(() => cb(resp), 0);
-        return Promise.resolve(resp);
-      },
-      lastError: null
-    },
-    contentSettings: {
-      javascript: {
-        get: (details, cb) => {
-          setTimeout(() => cb({ setting: "allow" }), 0);
-        },
-        set: (details) => {
-          console.log("Mock set contentSettings.javascript", details);
-        }
-      }
-    }
-  };
-}
-
-// ═══════════════════════════════════
 //  Navigation & Customization Setup
 // ═══════════════════════════════════
+// Every feature, in default menu order. storageKey is the real on/off switch
+// the feature's own code reads, so turning a feature off in Settings really
+// stops it (the background worker / content scripts check the same key).
 const FEATURES = [
   { id: "tabcleaner", label: "Tab Cleaner", icon: "🚮", navLabel: "Tabs", storageKey: "enabled", default: true, hasTab: true, description: "Automatically closes inactive tabs after a configurable timeout. Set excluded hosts to keep important tabs alive. View and re-open recently closed tabs." },
   { id: "cookies", label: "Cookie Editor", icon: "🍪", navLabel: "Cookies", storageKey: "feature_cookies_enabled", default: true, hasTab: true, description: "Full cookie manager for the current site. View, edit, add, and delete cookies. Export cookies as JSON." },
@@ -108,16 +11,36 @@ const FEATURES = [
   { id: "darkmode", label: "Dark Mode", icon: "🌙", navLabel: "Dark", storageKey: "feature_darkmode_enabled", default: true, hasTab: true, description: "Instant dark mode for any website using CSS filter inversion. Adjustable brightness. Toggle per-site, globally, or follow system theme." },
   { id: "xdim", label: "𝕏 Dim Mode", icon: "𝕏", navLabel: "Dim", storageKey: "xdim_enabled", default: false, hasTab: true, description: "Applies a custom dim theme to X / Twitter. Choose a theme or set a custom hue for less eye strain." },
   { id: "xunhook", label: "𝕏 Unhook", icon: "𝕏", navLabel: "Unhook", storageKey: "xunhook_enabled", default: true, hasTab: true, description: "Removes X / Twitter distractions like sidebar panels (trends, news), keeping search and primary navigation clear." },
-  { id: "jstoggle", label: "JS Toggle", icon: "⚡", navLabel: "JS", storageKey: "feature_jstoggle_enabled", default: true, hasTab: true, description: "Disable JavaScript for the current site. The page will reload when toggled." },
-  { id: "nocookie", label: "GDPR Consent", icon: "🚫", navLabel: "GDPR", storageKey: "nocookie_enabled", default: true, hasTab: true, description: "Auto-dismisses cookie consent popups. Hides banners via CSS and auto-clicks accept buttons for common consent frameworks." },
+  { id: "xreply", label: "𝕏 Reply Audience", icon: "𝕏", navLabel: "Reply", storageKey: "xreply_enabled", default: true, hasTab: true, description: "Auto-selects \"Accounts you follow and who they follow\" as the reply audience when you start a new post on X." },
+  { id: "xselect", label: "𝕏 Multi-Select", icon: "𝕏", navLabel: "Select", storageKey: "xselect_enabled", default: true, hasTab: true, description: "Adds checkboxes to replies on X so you can Hide, Block, or Hide + Block many replies at once." },
+  { id: "photopea", label: "Photopea No Ads", icon: "🫛", navLabel: "Photopea", storageKey: "photopea_enabled", default: true, hasTab: true, description: "Hides the ad column on photopea.com and expands the editor to the full window width." },
+  { id: "tiktok", label: "TikTok Login Skipper", icon: "🎶", navLabel: "TikTok", storageKey: "tiktok_enabled", default: true, hasTab: true, description: "Auto-skips TikTok's login and birthday popups so you can scroll and click without an account." },
+  { id: "archive", label: "No Paywall", icon: "🗄", navLabel: "No paywall", storageKey: "archive_enabled", default: true, hasTab: true, description: "Opens articles on listed paywalled news sites on archive.is instead. Homepages and section fronts are left alone." },
+  { id: "jstoggle", label: "JS Toggle", icon: "⚡", navLabel: "JS", storageKey: "feature_jstoggle_enabled", default: true, hasTab: true, description: "Disable JavaScript for the current site. The page will reload when toggled. Turning this feature off does not re-enable JavaScript on sites you already blocked." },
+  { id: "nocookie", label: "Cookies=OK (GDPR Consent)", icon: "🚫", navLabel: "Cookies=OK", storageKey: "nocookie_enabled", default: true, hasTab: true, description: "Auto-dismisses cookie consent popups. Hides banners via CSS and auto-clicks accept buttons for common consent frameworks." },
   { id: "livecss", label: "CSS Editor", icon: "🎨", navLabel: "CSS", storageKey: "feature_livecss_enabled", default: true, hasTab: true, description: "Write custom CSS for any website, applied in real-time as you type. Saved per-domain." },
   { id: "unhook", label: "YouTube Unhook", icon: "📺", navLabel: "YT Unhook", storageKey: "unhook_enabled", default: true, hasTab: true, description: "Removes YouTube distractions: no homepage feed, no sidebar suggestions, no end screen overlays, no Shorts." },
   { id: "music", label: "Music Recognizer", icon: "🎵", navLabel: "Music", storageKey: "feature_music_enabled", default: true, hasTab: true, description: "Shazam-like music identification for any tab. Captures audio and identifies the song via ACRCloud." },
+  { id: "summarize", label: "AI Summarize", icon: "✨", navLabel: "Summarize", storageKey: "feature_summarize_enabled", default: true, hasTab: true, description: "Summarizes the current page with OpenAI, Anthropic, or xAI using your own API key." },
   { id: "pip", label: "Picture-in-Picture", icon: "🖼", navLabel: "PiP", storageKey: "feature_pip_enabled", default: true, hasTab: true, description: "Pops the largest video on the current tab into a floating PiP window. Click again to exit." },
   { id: "jsonformat", label: "JSON Formatter", icon: "{}", navLabel: "JSON", storageKey: "jsonformat_enabled", default: true, hasTab: true, description: "Auto-detects pure JSON response pages and formats them with syntax highlighting, collapsible sections, and a dark theme." },
-  { id: "gmaps", label: "Google Maps Links", icon: "🗺", navLabel: "", storageKey: "feature_gmaps_enabled", default: true, hasTab: false, description: "Re-adds clickable Google Maps links and map preview cards to Google Search results." },
-  { id: "viewimage", label: "View Image Button", icon: "🖼", navLabel: "", storageKey: "feature_viewimage_enabled", default: true, hasTab: false, description: "Adds a 'View Image' button back to Google Images, linking directly to the full-size original image." }
+  { id: "gmaps", label: "Google Maps Links", icon: "🗺", navLabel: "", storageKey: "feature_gmaps_enabled", default: true, hasTab: false, description: "Re-adds clickable Google Maps links and map preview cards to Google Search results. Takes effect on the next Google page load." },
+  { id: "viewimage", label: "View Image Button", icon: "🖼", navLabel: "", storageKey: "feature_viewimage_enabled", default: true, hasTab: false, description: "Adds a 'View Image' button back to Google Images, linking directly to the full-size original image. Takes effect on the next Google page load." }
 ];
+
+function isFeatureEnabled(f, data) {
+  return data[f.storageKey] !== undefined ? data[f.storageKey] !== false : f.default;
+}
+
+function sortFeatures(order) {
+  return [...FEATURES].sort((a, b) => {
+    let idxA = order.indexOf(a.id);
+    let idxB = order.indexOf(b.id);
+    if (idxA === -1) idxA = 999;
+    if (idxB === -1) idxB = 999;
+    return idxA - idxB;
+  });
+}
 
 function loadTabDescriptions() {
   const mappings = {
@@ -145,71 +68,81 @@ function switchToPage(page) {
   if (!btn) return;
   btn.classList.add("active");
   document.getElementById("page-" + page).classList.add("active");
-  if (page === "cookies") loadCookies();
-  if (page === "redirects") loadRedirects();
-  if (page === "darkmode") loadDarkMode();
-  if (page === "xdim") loadXDim();
-  if (page === "jstoggle") loadJsToggle();
-  if (page === "nocookie") loadNoCookie();
-  if (page === "livecss") loadLiveCSS();
-  if (page === "unhook") loadUnhook();
-  if (page === "xunhook") loadXUnhook();
-  if (page === "jsonformat") loadJsonFormat();
-  if (page === "music") { loadMusicHistory(); loadAcrFields(); }
-  if (page === "settings") loadSettings();
+  // Defer the data-loading work so the page swap paints first
+  const load = () => {
+    if (page === "cookies") loadCookies();
+    else if (page === "redirects") loadRedirects();
+    else if (page === "darkmode") loadDarkMode();
+    else if (page === "xdim") loadXDim();
+    else if (page === "jstoggle") loadJsToggle();
+    else if (page === "nocookie") loadNoCookie();
+    else if (page === "livecss") loadLiveCSS();
+    else if (page === "unhook") loadUnhook();
+    else if (page === "xunhook") loadXUnhook();
+    else if (page === "xreply") loadXReply();
+    else if (page === "xselect") loadXSelect();
+    else if (page === "photopea") loadPhotopea();
+    else if (page === "tiktok") loadTikTok();
+    else if (page === "archive") loadArchive();
+    else if (page === "jsonformat") loadJsonFormat();
+    else if (page === "summarize") loadSummarize();
+    else if (page === "music") { loadMusicHistory(); loadAcrFields(); }
+    else if (page === "settings") loadSettings();
+  };
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(load);
+  else setTimeout(load, 0);
   chrome.storage.local.set({ last_tab: page });
 }
 
-function updateNav() {
+// Builds the nav from FEATURES: skips features that are turned off or hidden,
+// uses the saved custom order, and always ends with Settings.
+// restoreTab=true opens the last used tab (popup start); otherwise the
+// current page stays open if it is still in the nav.
+function updateNav(restoreTab) {
   const keys = FEATURES.map(f => f.storageKey).concat(["hidden_features", "last_tab", "feature_order"]);
   chrome.storage.local.get(keys, (data) => {
     const hiddenFeatures = data.hidden_features || [];
     const order = data.feature_order || FEATURES.map(f => f.id);
-    let activePage = data.last_tab || "tabcleaner";
-    
-    const sortedFeatures = [...FEATURES].sort((a, b) => {
-      let idxA = order.indexOf(a.id);
-      let idxB = order.indexOf(b.id);
-      if (idxA === -1) idxA = 999;
-      if (idxB === -1) idxB = 999;
-      return idxA - idxB;
-    });
+    const current = document.querySelector(".nav button.active");
+    let activePage = restoreTab || !current
+      ? (data.last_tab || "tabcleaner")
+      : current.dataset.page;
 
     const navBar = document.getElementById("navBar");
     if (!navBar) return;
 
-    let navHtml = "";
+    navBar.innerHTML = "";
     let firstVisiblePage = "";
-    let activePageIsVisible = false;
+    const addButton = (page, text) => {
+      const btn = document.createElement("button");
+      btn.dataset.page = page;
+      btn.textContent = text;
+      btn.addEventListener("click", () => {
+        switchToPage(page);
+        // Clicking the PiP tab toggles PiP right away (needs the user gesture,
+        // so only on a real click — not when restoring last_tab)
+        if (page === "pip") enterPiP();
+      });
+      navBar.appendChild(btn);
+    };
 
-    sortedFeatures.forEach((f) => {
+    sortFeatures(order).forEach((f) => {
       if (!f.hasTab) return;
-      const isEnabled = data[f.storageKey] !== undefined ? data[f.storageKey] !== false : f.default;
-      const isHidden = hiddenFeatures.includes(f.id);
-      
-      if (isEnabled && !isHidden) {
-        const activeClass = (f.id === activePage) ? "class=\"active\"" : "";
-        navHtml += `<button ${activeClass} data-page="${f.id}">${f.icon} ${f.navLabel}</button>`;
-        if (!firstVisiblePage) firstVisiblePage = f.id;
-        if (f.id === activePage) activePageIsVisible = true;
-      }
+      if (!isFeatureEnabled(f, data) || hiddenFeatures.includes(f.id)) return;
+      addButton(f.id, `${f.icon} ${f.navLabel}`);
+      if (!firstVisiblePage) firstVisiblePage = f.id;
     });
+    addButton("settings", "⚙️ Settings");
 
-    const settingsActive = (activePage === "settings") ? "class=\"active\"" : "";
-    navHtml += `<button ${settingsActive} data-page="settings">⚙️ Settings</button>`;
-    if (!firstVisiblePage) firstVisiblePage = "settings";
-    if (activePage === "settings") activePageIsVisible = true;
-
-    navBar.innerHTML = navHtml;
-
-    navBar.querySelectorAll("button").forEach((btn) => {
-      btn.addEventListener("click", () => switchToPage(btn.dataset.page));
-    });
-
-    if (!activePageIsVisible) {
-      switchToPage(firstVisiblePage || "settings");
+    const target = navBar.querySelector(`button[data-page="${activePage}"]`)
+      ? activePage
+      : (firstVisiblePage || "settings");
+    // Repaint the active state; only reload page data when the page changes
+    const pageEl = document.getElementById("page-" + target);
+    if (pageEl && pageEl.classList.contains("active") && !restoreTab) {
+      navBar.querySelector(`button[data-page="${target}"]`).classList.add("active");
     } else {
-      switchToPage(activePage);
+      switchToPage(target);
     }
   });
 }
@@ -239,7 +172,8 @@ function addHost() {
   host = host.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
   chrome.storage.local.get(["exclusions"], (data) => {
     const exclusions = data.exclusions || [];
-    if (exclusions.includes(host)) { hostInput.value = ""; return; }
+    // Already listed (with or without the "exact:" prefix)?
+    if (exclusions.includes(host) || exclusions.includes("exact:" + host)) { hostInput.value = ""; return; }
     exclusions.push(host);
     chrome.storage.local.set({ exclusions }, () => {
       hostInput.value = "";
@@ -347,7 +281,8 @@ function timeAgo(ts) {
   return Math.floor(hrs / 24) + "d ago";
 }
 
-loadClosedTabs();
+// Defer closed-tab history (up to 50 favicon img loads) until after first paint
+requestAnimationFrame(loadClosedTabs);
 
 // ═══════════════════════════════════
 //  Cookie Editor
@@ -360,9 +295,14 @@ let currentUrl = "";
 let currentDomain = "";
 let allCookies = [];
 
+function getCookieFilterQuery() {
+  const filterInput = document.getElementById("cookieFilter");
+  return filterInput ? filterInput.value.trim().toLowerCase() : "";
+}
+
 function filterAndRenderCookies() {
   const filterInput = document.getElementById("cookieFilter");
-  const query = filterInput ? filterInput.value.trim().toLowerCase() : "";
+  const query = getCookieFilterQuery();
 
   const btnClearCookieFilter = document.getElementById("btnClearCookieFilter");
   if (btnClearCookieFilter) {
@@ -399,7 +339,7 @@ async function loadCookies() {
     return;
   }
   currentUrl = tab.url;
-  
+
   let tabDomain = "";
   try {
     tabDomain = new URL(tab.url).hostname;
@@ -418,16 +358,20 @@ async function loadCookies() {
   const cookies = await chrome.cookies.getAll({ url: tab.url });
   cookies.sort((a, b) => a.name.localeCompare(b.name));
   allCookies = cookies;
-  
+
   filterAndRenderCookies();
 }
 
 function renderCookies(cookies) {
   if (!cookies.length) {
-    cookieListEl.innerHTML = '<div class="empty">No cookies for this site</div>';
+    cookieListEl.innerHTML = allCookies.length
+      ? '<div class="empty">No cookies match the filter</div>'
+      : '<div class="empty">No cookies for this site</div>';
     return;
   }
-  cookieListEl.innerHTML = cookies.map((c, i) => `
+  // Each row carries its index in allCookies (not in the filtered list), so
+  // Delete / Save always act on the cookie shown in that row
+  cookieListEl.innerHTML = cookies.map((c) => ({ c, i: allCookies.indexOf(c) })).map(({ c, i }) => `
     <div class="cookie-item" data-idx="${i}">
       <div class="cookie-row">
         <span class="cookie-chevron">&#9660;</span>
@@ -558,7 +502,7 @@ const btnDeleteFiltered = document.getElementById("btnDeleteFiltered");
 if (btnDeleteFiltered) {
   btnDeleteFiltered.addEventListener("click", async () => {
     const filterInput = document.getElementById("cookieFilter");
-    const query = filterInput ? filterInput.value.trim().toLowerCase() : "";
+    const query = getCookieFilterQuery();
     if (!query) return;
 
     const filtered = allCookies.filter((c) => c.name.toLowerCase().includes(query));
@@ -572,6 +516,20 @@ if (btnDeleteFiltered) {
 
     if (filterInput) filterInput.value = "";
     loadCookies();
+  });
+}
+
+// Filter Cookies on input
+const cookieFilterInput = document.getElementById("cookieFilter");
+const btnClearCookieFilter = document.getElementById("btnClearCookieFilter");
+if (cookieFilterInput) {
+  cookieFilterInput.addEventListener("input", filterAndRenderCookies);
+}
+if (btnClearCookieFilter && cookieFilterInput) {
+  btnClearCookieFilter.addEventListener("click", () => {
+    cookieFilterInput.value = "";
+    filterAndRenderCookies();
+    cookieFilterInput.focus();
   });
 }
 
@@ -590,20 +548,6 @@ document.getElementById("btnExport").addEventListener("click", () => {
   a.click();
   URL.revokeObjectURL(url);
 });
-
-// Filter Cookies on input
-const cookieFilterInput = document.getElementById("cookieFilter");
-const btnClearCookieFilter = document.getElementById("btnClearCookieFilter");
-if (cookieFilterInput) {
-  cookieFilterInput.addEventListener("input", filterAndRenderCookies);
-}
-if (btnClearCookieFilter && cookieFilterInput) {
-  btnClearCookieFilter.addEventListener("click", () => {
-    cookieFilterInput.value = "";
-    filterAndRenderCookies();
-    cookieFilterInput.focus();
-  });
-}
 
 // Add Cookie Modal
 const addModal = document.getElementById("addModal");
@@ -733,6 +677,29 @@ const scopeGlobal = document.getElementById("scopeGlobal");
 let darkHost = "";
 let darkScope = "site"; // "site" or "global"
 
+// Stored values: true/"on", false/"off", "system" (old booleans still work)
+function normalizeDarkMode(raw) {
+  if (raw === true || raw === "on") return "on";
+  if (raw === "system") return "system";
+  return "off";
+}
+
+function showDarkMode(mode) {
+  const container = document.getElementById("darkPillSelector");
+  if (!container) return;
+  const btns = Array.from(container.querySelectorAll(".pill-btn"));
+  const activeBtn = container.querySelector(`.pill-btn[data-mode="${mode}"]`);
+  const glider = container.querySelector(".pill-glider");
+  btns.forEach(b => b.classList.remove("active"));
+  if (activeBtn) {
+    activeBtn.classList.add("active");
+    const idx = btns.indexOf(activeBtn);
+    if (glider) {
+      glider.style.transform = `translateX(${idx * 100}%)`;
+    }
+  }
+}
+
 async function loadDarkMode() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.url) return;
@@ -747,59 +714,43 @@ async function loadDarkMode() {
   darkBrightness.value = brightness;
   darkBrightnessVal.textContent = brightness + "%";
 
+  // "All sites" shows the global setting; "This site only" shows what applies here
   const siteState = data[siteKey];
-  const globalState = data.darkmode_global !== undefined ? data.darkmode_global : "off";
+  const globalState = data.darkmode_global;
   const rawMode = darkScope === "global" ? globalState : (siteState !== undefined ? siteState : globalState);
+  showDarkMode(normalizeDarkMode(rawMode));
+}
 
-  let mode = "off";
-  if (rawMode === true || rawMode === "on") mode = "on";
-  else if (rawMode === false || rawMode === "off") mode = "off";
-  else if (rawMode === "system") mode = "system";
-
-  const container = document.getElementById("darkPillSelector");
-  if (container) {
-    const btns = Array.from(container.querySelectorAll(".pill-btn"));
-    const activeBtn = container.querySelector(`.pill-btn[data-mode="${mode}"]`);
-    const glider = container.querySelector(".pill-glider");
-    
-    btns.forEach(b => b.classList.remove("active"));
-    if (activeBtn) {
-      activeBtn.classList.add("active");
-      const idx = btns.indexOf(activeBtn);
-      if (glider) {
-        glider.style.transform = `translateX(${idx * 100}%)`;
-      }
-    }
+async function notifyDarkModeTab() {
+  // The content script re-reads storage and re-checks the page
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab) {
+    chrome.tabs.sendMessage(tab.id, { type: "darkmode_toggle" }).catch(() => {});
   }
 }
 
 async function setDarkMode(mode) {
-  const container = document.getElementById("darkPillSelector");
-  if (container) {
-    const btns = Array.from(container.querySelectorAll(".pill-btn"));
-    const activeBtn = container.querySelector(`.pill-btn[data-mode="${mode}"]`);
-    const glider = container.querySelector(".pill-glider");
-    btns.forEach(b => b.classList.remove("active"));
-    if (activeBtn) {
-      activeBtn.classList.add("active");
-      const idx = btns.indexOf(activeBtn);
-      if (glider) {
-        glider.style.transform = `translateX(${idx * 100}%)`;
-      }
-    }
-  }
+  showDarkMode(mode);
 
   if (darkScope === "global") {
     await chrome.storage.local.set({ darkmode_global: mode });
+    // "All sites" is a master switch: clear any per-site overrides so that
+    // toggling it (esp. OFF) truly applies everywhere. Otherwise a leftover
+    // per-site value keeps winning over global and the site stays dark.
+    const all = await chrome.storage.local.get(null);
+    const overrides = Object.keys(all).filter(
+      (k) =>
+        k.startsWith("darkmode_") &&
+        k !== "darkmode_global" &&
+        k !== "darkmode_brightness"
+    );
+    if (overrides.length) await chrome.storage.local.remove(overrides);
   } else {
     const siteKey = "darkmode_" + darkHost;
     await chrome.storage.local.set({ [siteKey]: mode });
   }
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
-    chrome.tabs.sendMessage(tab.id, { type: "darkmode_toggle" }).catch(() => {});
-  }
+  await notifyDarkModeTab();
 }
 
 const darkPillSelector = document.getElementById("darkPillSelector");
@@ -817,10 +768,7 @@ darkBrightness.addEventListener("input", () => {
 darkBrightness.addEventListener("change", async () => {
   const brightness = parseInt(darkBrightness.value);
   await chrome.storage.local.set({ darkmode_brightness: brightness });
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
-    chrome.tabs.sendMessage(tab.id, { type: "darkmode_toggle" }).catch(() => {});
-  }
+  await notifyDarkModeTab();
 });
 
 scopeSite.addEventListener("click", () => {
@@ -912,6 +860,9 @@ xdimHueSlider.addEventListener("change", async () => {
   await chrome.storage.local.set({ xdim_customHue: xdimCustomHue });
 });
 
+// ═══════════════════════════════════
+//  Cookie Consent (GDPR) Dismisser
+// ═══════════════════════════════════
 let nocookieHost = "";
 
 async function loadNoCookie() {
@@ -920,9 +871,9 @@ async function loadNoCookie() {
   const hostLabel = document.getElementById("nocookieHost");
   const btnExclude = document.getElementById("btnNocookieExclude");
   const listHeader = document.getElementById("nocookieExclusionsHeader");
-  const listEl = document.getElementById("nocookieExclusionsList");
+  const exclListEl = document.getElementById("nocookieExclusionsList");
 
-  if (!container || !hostLabel || !btnExclude || !listHeader || !listEl) return;
+  if (!container || !hostLabel || !btnExclude || !listHeader || !exclListEl) return;
 
   if (tab && tab.url && (tab.url.startsWith("http://") || tab.url.startsWith("https://"))) {
     try {
@@ -958,16 +909,16 @@ async function loadNoCookie() {
 
     if (exclusions.length > 0) {
       listHeader.style.display = "block";
-      listEl.innerHTML = exclusions
+      exclListEl.innerHTML = exclusions
         .map((h) => `<div class="item"><span>${esc(h)}</span><button data-host="${escA(h)}">&times;</button></div>`)
         .join("");
 
-      listEl.querySelectorAll("button[data-host]").forEach((btn) => {
+      exclListEl.querySelectorAll("button[data-host]").forEach((btn) => {
         btn.addEventListener("click", () => removeNocookieExclusion(btn.dataset.host));
       });
     } else {
       listHeader.style.display = "none";
-      listEl.innerHTML = "";
+      exclListEl.innerHTML = "";
     }
   });
 }
@@ -982,14 +933,14 @@ async function toggleNocookieExclusion() {
       exclusions.push(nocookieHost);
     }
     await chrome.storage.local.set({ nocookie_exclusions: exclusions });
-    
+
     // Notify active tab content script
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab) {
       chrome.tabs.sendMessage(tab.id, { type: "nocookie_exclusions_updated" }).catch(() => {});
       chrome.tabs.reload(tab.id);
     }
-    
+
     loadNoCookie();
   });
 }
@@ -998,7 +949,7 @@ function removeNocookieExclusion(host) {
   chrome.storage.local.get(["nocookie_exclusions"], async (data) => {
     const exclusions = (data.nocookie_exclusions || []).filter((h) => h !== host);
     await chrome.storage.local.set({ nocookie_exclusions: exclusions });
-    
+
     // Notify active tab content script
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab) {
@@ -1010,12 +961,11 @@ function removeNocookieExclusion(host) {
         }
       } catch {}
     }
-    
+
     loadNoCookie();
   });
 }
 
-// Bind button listener
 const btnNocookieExclude = document.getElementById("btnNocookieExclude");
 if (btnNocookieExclude) {
   btnNocookieExclude.addEventListener("click", toggleNocookieExclusion);
@@ -1083,12 +1033,118 @@ livecssClear.addEventListener("click", async () => {
 // ═══════════════════════════════════
 //  YouTube Unhook
 // ═══════════════════════════════════
-function loadUnhook() {}
+const unhookFeatureEls = document.querySelectorAll("#unhookFeatures .unhook-feature");
+const UNHOOK_FEATURE_DEFAULTS = { homepage: true, sidebar: true, endscreen: true, shorts: true, wider: true };
+
+async function getUnhookFeatures() {
+  const data = await chrome.storage.local.get(["unhook_features"]);
+  return { ...UNHOOK_FEATURE_DEFAULTS, ...(data.unhook_features || {}) };
+}
+
+async function loadUnhook() {
+  const features = await getUnhookFeatures();
+  unhookFeatureEls.forEach((el) => {
+    el.classList.toggle("off", features[el.dataset.feature] === false);
+  });
+}
+
+async function pushUnhookState() {
+  const data = await chrome.storage.local.get(["unhook_enabled"]);
+  const enabled = data.unhook_enabled !== false;
+  const features = await getUnhookFeatures();
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab) {
+    chrome.tabs.sendMessage(tab.id, { type: "unhook_toggle", enabled, features }).catch(() => {});
+  }
+}
+
+unhookFeatureEls.forEach((el) => {
+  el.addEventListener("click", async () => {
+    const features = await getUnhookFeatures();
+    const key = el.dataset.feature;
+    features[key] = !features[key];
+    el.classList.toggle("off", !features[key]);
+    await chrome.storage.local.set({ unhook_features: features });
+    await pushUnhookState();
+  });
+});
 
 // ═══════════════════════════════════
 //  X Unhook
 // ═══════════════════════════════════
+// (On/off lives in Settings — see FEATURE_TOGGLE_EFFECTS)
 function loadXUnhook() {}
+
+// ═══════════════════════════════════
+//  Photopea No Ads
+// ═══════════════════════════════════
+// (On/off lives in Settings — see FEATURE_TOGGLE_EFFECTS)
+function loadPhotopea() {}
+
+// ═══════════════════════════════════
+//  TikTok Login Skipper
+// ═══════════════════════════════════
+// (On/off lives in Settings — see FEATURE_TOGGLE_EFFECTS)
+function loadTikTok() {}
+
+// ═══════════════════════════════════
+//  No Paywall
+// ═══════════════════════════════════
+const ARCHIVE_DEFAULT_SITES = [
+  "nytimes.com", "wsj.com", "ft.com", "bloomberg.com", "washingtonpost.com",
+  "economist.com", "newyorker.com", "theatlantic.com", "wired.com",
+  "businessinsider.com", "telegraph.co.uk", "thetimes.co.uk", "latimes.com",
+  "theverge.com", "reuters.com", "fortune.com", "newscientist.com",
+  "scientificamerican.com", "404media.co", "forbes.com", "technologyreview.com",
+  "foreignpolicy.com", "afr.com", "smh.com.au", "theglobeandmail.com", "scmp.com",
+  "chronicle.com", "ajc.com", "texasmonthly.com", "outsideonline.com", "americanbanker.com",
+  "spectator.co.uk", "newstatesman.com", "irishtimes.com",
+  // Netherlands / Belgium
+  "nrc.nl", "volkskrant.nl", "telegraaf.nl", "parool.nl", "trouw.nl", "ad.nl", "fd.nl",
+  "ftm.nl", "nd.nl", "rd.nl", "groene.nl",
+  "gelderlander.nl", "bndestem.nl", "bd.nl", "ed.nl", "pzc.nl", "tubantia.nl", "destentor.nl",
+  "noordhollandsdagblad.nl", "haarlemsdagblad.nl", "leidschdagblad.nl", "gooieneemlander.nl",
+  "ijmuidercourant.nl", "limburger.nl", "dvhn.nl", "lc.nl",
+  "standaard.be", "demorgen.be", "hln.be", "nieuwsblad.be", "gva.be", "hbvl.be", "tijd.be",
+  // Germany / Austria / Switzerland
+  "spiegel.de", "zeit.de", "faz.net", "sueddeutsche.de", "welt.de", "handelsblatt.com",
+  "tagesspiegel.de", "derstandard.at", "diepresse.com", "nzz.ch", "tagesanzeiger.ch",
+  // France / Italy / Spain
+  "lemonde.fr", "lefigaro.fr", "liberation.fr", "lesechos.fr", "mediapart.fr", "lepoint.fr",
+  "corriere.it", "repubblica.it", "ilsole24ore.com", "elpais.com", "elmundo.es", "lavanguardia.com",
+  // Nordics
+  "dn.se", "svd.se", "aftenposten.no", "hs.fi", "politiken.dk", "berlingske.dk",
+];
+const archiveSites = document.getElementById("archiveSites");
+
+async function loadArchive() {
+  const data = await chrome.storage.local.get(["archive_sites"]);
+  const sites = Array.isArray(data.archive_sites) ? data.archive_sites : ARCHIVE_DEFAULT_SITES;
+  archiveSites.value = sites.join("\n");
+}
+
+let archiveSaveTimer;
+archiveSites.addEventListener("input", () => {
+  clearTimeout(archiveSaveTimer);
+  archiveSaveTimer = setTimeout(() => {
+    const sites = archiveSites.value.split("\n")
+      .map((s) => s.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, ""))
+      .filter(Boolean);
+    chrome.storage.local.set({ archive_sites: sites });
+  }, 300);
+});
+
+// ═══════════════════════════════════
+//  X Reply Auto-Select
+// ═══════════════════════════════════
+// (On/off lives in Settings — see FEATURE_TOGGLE_EFFECTS)
+function loadXReply() {}
+
+// ═══════════════════════════════════
+//  X Multi-Select Replies
+// ═══════════════════════════════════
+// (On/off lives in Settings — see FEATURE_TOGGLE_EFFECTS)
+function loadXSelect() {}
 
 // ═══════════════════════════════════
 //  JavaScript Toggle
@@ -1423,12 +1479,305 @@ async function enterPiP() {
 // ═══════════════════════════════════
 //  JSON Formatter
 // ═══════════════════════════════════
+// (On/off lives in Settings — see FEATURE_TOGGLE_EFFECTS)
 function loadJsonFormat() {}
+
+// ═══════════════════════════════════
+//  AI Summarize
+// ═══════════════════════════════════
+const AI_PROVIDERS = {
+  openai: {
+    label: "OpenAI",
+    defaultModel: "gpt-4o",
+    signup: "https://platform.openai.com/api-keys",
+    keyHint: "(sk-...)",
+  },
+  anthropic: {
+    label: "Anthropic",
+    defaultModel: "claude-opus-4-8",
+    signup: "https://console.anthropic.com/settings/keys",
+    keyHint: "(sk-ant-...)",
+  },
+  xai: {
+    label: "xAI",
+    defaultModel: "grok-4",
+    signup: "https://console.x.ai/",
+    keyHint: "(xai-...)",
+  },
+};
+
+const LENGTH_PROMPTS = {
+  brief: "Summarize it in 3-4 clear sentences.",
+  bullets: "Summarize it as 5-8 concise bullet points, each starting with '- '.",
+  detailed: "Write a detailed summary with a short intro paragraph followed by key points.",
+};
+
+const aiProviderEl = document.getElementById("aiProvider");
+const aiLengthEl = document.getElementById("aiLength");
+const aiKeyEl = document.getElementById("aiKey");
+const aiModelEl = document.getElementById("aiModel");
+const aiResultEl = document.getElementById("aiResult");
+const aiConfigEl = document.getElementById("aiConfig");
+const summarizeBtn = document.getElementById("summarizeBtn");
+
+function loadSummarize() {
+  chrome.storage.local.get(["ai_provider", "ai_length"], (data) => {
+    aiProviderEl.value = data.ai_provider || "openai";
+    if (data.ai_length) aiLengthEl.value = data.ai_length;
+    refreshAiProviderFields();
+  });
+}
+
+// Populate key + model inputs and signup link for the currently selected provider
+function refreshAiProviderFields() {
+  const provider = aiProviderEl.value;
+  const cfg = AI_PROVIDERS[provider];
+  chrome.storage.local.get(
+    [`ai_key_${provider}`, `ai_model_${provider}`],
+    (data) => {
+      const key = data[`ai_key_${provider}`] || "";
+      aiKeyEl.value = key;
+      aiModelEl.value = data[`ai_model_${provider}`] || cfg.defaultModel;
+      document.getElementById("aiSignupLink").href = cfg.signup;
+      document.getElementById("aiKeyHint").textContent = cfg.keyHint;
+      // Auto-open config if no key saved for this provider yet
+      aiConfigEl.style.display = key ? "none" : "block";
+    }
+  );
+}
+
+aiProviderEl.addEventListener("change", () => {
+  chrome.storage.local.set({ ai_provider: aiProviderEl.value });
+  refreshAiProviderFields();
+});
+
+aiLengthEl.addEventListener("change", () => {
+  chrome.storage.local.set({ ai_length: aiLengthEl.value });
+});
+
+document.getElementById("aiSettingsBtn").addEventListener("click", () => {
+  aiConfigEl.style.display = aiConfigEl.style.display === "none" ? "block" : "none";
+});
+
+document.getElementById("aiSaveBtn").addEventListener("click", () => {
+  const provider = aiProviderEl.value;
+  const cfg = AI_PROVIDERS[provider];
+  chrome.storage.local.set(
+    {
+      [`ai_key_${provider}`]: aiKeyEl.value.trim(),
+      [`ai_model_${provider}`]: aiModelEl.value.trim() || cfg.defaultModel,
+    },
+    () => {
+      aiConfigEl.style.display = "none";
+    }
+  );
+});
+
+function showAiResult(html, cls) {
+  aiResultEl.className = "ai-result show";
+  aiResultEl.innerHTML = cls === "err" ? `<span class="ai-err">${html}</span>` : html;
+}
+
+// Grab the visible text of the active tab, capped to keep token use sane
+function extractPageText() {
+  const el = document.querySelector("main, article") || document.body;
+  const text = (el.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
+  return { title: document.title, url: location.href, text: text.slice(0, 20000) };
+}
+
+summarizeBtn.addEventListener("click", async () => {
+  const provider = aiProviderEl.value;
+  const cfg = AI_PROVIDERS[provider];
+  const key = aiKeyEl.value.trim();
+  const model = aiModelEl.value.trim() || cfg.defaultModel;
+
+  if (!key) {
+    aiConfigEl.style.display = "block";
+    showAiResult(`Add your ${cfg.label} API key first.`, "err");
+    return;
+  }
+
+  summarizeBtn.disabled = true;
+  showAiResult(`<span class="ai-spin">Reading page…</span>`);
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || /^(chrome|edge|about|chrome-extension):/.test(tab.url || "")) {
+      throw new Error("Can't read this page. Open a normal website tab.");
+    }
+    const [{ result: page } = {}] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: extractPageText,
+    });
+    if (!page || !page.text) throw new Error("No readable text found on this page.");
+
+    showAiResult(`<span class="ai-spin">Summarizing with ${cfg.label}…</span>`);
+
+    const system =
+      "You are a helpful assistant that summarizes web pages. Be accurate and concise. Use plain text with '- ' for bullet points.";
+    const user =
+      `Summarize this web page. ${LENGTH_PROMPTS[aiLengthEl.value]}\n\n` +
+      `Title: ${page.title}\nURL: ${page.url}\n\n${page.text}`;
+
+    const summary = await callAiProvider(provider, model, key, system, user);
+    renderSummary(summary);
+    chrome.storage.local.set({ ai_length: aiLengthEl.value });
+  } catch (err) {
+    showAiResult(esc(err.message || "Something went wrong."), "err");
+  } finally {
+    summarizeBtn.disabled = false;
+  }
+});
+
+// Dispatch to the right provider API. Returns the summary text.
+async function callAiProvider(provider, model, key, system, user) {
+  let url, headers, body, pick;
+
+  if (provider === "anthropic") {
+    url = "https://api.anthropic.com/v1/messages";
+    headers = {
+      "content-type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      // Required for calling the API directly from a browser/extension context
+      "anthropic-dangerous-direct-browser-access": "true",
+    };
+    body = {
+      model,
+      max_tokens: 1024,
+      system,
+      messages: [{ role: "user", content: user }],
+    };
+    pick = (d) => (d.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
+  } else {
+    // OpenAI and xAI share the OpenAI-compatible chat completions shape
+    url =
+      provider === "xai"
+        ? "https://api.x.ai/v1/chat/completions"
+        : "https://api.openai.com/v1/chat/completions";
+    headers = { "content-type": "application/json", Authorization: `Bearer ${key}` };
+    body = {
+      model,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    };
+    pick = (d) => d.choices?.[0]?.message?.content || "";
+  }
+
+  const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data?.error?.message || data?.error?.type || `HTTP ${res.status}`;
+    throw new Error(`${AI_PROVIDERS[provider].label}: ${msg}`);
+  }
+  const text = pick(data);
+  if (!text) throw new Error("Empty response from provider.");
+  return text.trim();
+}
+
+// Minimal safe markdown: escape, then **bold**, and '- ' bullet lists
+function renderSummary(text) {
+  const lines = text.split("\n");
+  let html = "";
+  let inList = false;
+  for (const raw of lines) {
+    const line = raw.trim();
+    const bullet = /^[-*•]\s+/.test(line);
+    if (bullet) {
+      if (!inList) { html += "<ul>"; inList = true; }
+      html += `<li>${fmtInline(line.replace(/^[-*•]\s+/, ""))}</li>`;
+    } else {
+      if (inList) { html += "</ul>"; inList = false; }
+      if (line) html += `<p style="margin:6px 0">${fmtInline(line)}</p>`;
+    }
+  }
+  if (inList) html += "</ul>";
+  showAiResult(`<button class="ai-copy" id="aiCopyBtn">Copy</button>${html}`);
+  document.getElementById("aiCopyBtn").addEventListener("click", () => {
+    navigator.clipboard.writeText(text).then(() => {
+      const b = document.getElementById("aiCopyBtn");
+      b.textContent = "Copied!";
+      setTimeout(() => (b.textContent = "Copy"), 1500);
+    });
+  });
+}
+
+function fmtInline(s) {
+  return esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+}
+
+// ═══════════════════════════════════
+//  Helpers
+// ═══════════════════════════════════
+function esc(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+function escA(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
 // ═══════════════════════════════════
 //  Settings Panel Customization
 // ═══════════════════════════════════
 let showHidden = false;
+
+// Send a message to every open tab (or the tabs matching urls), ignoring
+// tabs without our content script
+async function messageTabs(msg, urls) {
+  const tabs = await chrome.tabs.query(urls ? { url: urls } : {});
+  for (const tab of tabs) {
+    chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
+  }
+}
+
+const PHOTOPEA_URLS = ["*://www.photopea.com/*", "*://photopea.com/*"];
+const TIKTOK_URLS = ["*://www.tiktok.com/*", "*://tiktok.com/*"];
+
+// What has to happen, besides saving the switch, when a feature is turned
+// on or off, so already-open pages follow the setting right away.
+// Features not listed need nothing more: the background worker reads the
+// switch itself (tab cleaner, redirects, PiP, No Paywall), the feature only
+// lives in this popup (cookies, JS toggle, music, summarize), or it applies
+// on the next page load (Google Maps links, View Image).
+const FEATURE_TOGGLE_EFFECTS = {
+  darkmode: () => messageTabs({ type: "darkmode_toggle" }),
+  xdim: (enabled) => messageTabs({ type: "xdim_toggle", enabled }),
+  xunhook: (enabled) => messageTabs({ type: "xunhook_toggle", enabled }),
+  xreply: (enabled) => messageTabs({ type: "xreply_toggle", enabled }),
+  xselect: (enabled) => messageTabs({ type: "xselect_toggle", enabled }),
+  nocookie: (enabled) => messageTabs({ type: "nocookie_toggle", enabled }),
+  livecss: (enabled) => messageTabs({ type: "livecss_feature_toggle", enabled }),
+  jsonformat: (enabled) => messageTabs({ type: "jsonformat_toggle", enabled }),
+  tiktok: (enabled) => messageTabs({ type: "tiktok_toggle", enabled }, TIKTOK_URLS),
+  unhook: async (enabled) => {
+    const features = await getUnhookFeatures();
+    await messageTabs({ type: "unhook_toggle", enabled, features });
+  },
+  // The width fix runs at page load, so reload any open Photopea tabs
+  photopea: async () => {
+    const tabs = await chrome.tabs.query({ url: PHOTOPEA_URLS });
+    for (const tab of tabs) chrome.tabs.reload(tab.id).catch(() => {});
+  },
+};
+
+// Save the on/off state of several features and apply the effects of the
+// ones that actually changed
+async function setFeaturesEnabled(updates) {
+  const features = FEATURES.filter(f => f.id in updates);
+  const before = await chrome.storage.local.get(features.map(f => f.storageKey));
+  const toSave = {};
+  features.forEach(f => { toSave[f.storageKey] = updates[f.id]; });
+  await chrome.storage.local.set(toSave);
+  for (const f of features) {
+    if (isFeatureEnabled(f, before) !== updates[f.id] && FEATURE_TOGGLE_EFFECTS[f.id]) {
+      await FEATURE_TOGGLE_EFFECTS[f.id](updates[f.id]);
+    }
+  }
+}
 
 function renderFeatureRow(f, isEnabled, isHidden, isVisible) {
   const toggleId = `setting-toggle-${f.id}`;
@@ -1438,7 +1787,7 @@ function renderFeatureRow(f, isEnabled, isHidden, isVisible) {
     ? `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
     : `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
   const hideTitle = isHidden ? "Show feature in navigation" : "Hide feature from navigation";
-  
+
   const dragHandleIcon = `
     <svg width="12" height="18" viewBox="0 0 12 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
       <circle cx="3" cy="3" r="1" fill="currentColor"/>
@@ -1452,13 +1801,13 @@ function renderFeatureRow(f, isEnabled, isHidden, isVisible) {
 
   return `
     <div class="setting-item ${hiddenClass}" data-feature-id="${f.id}" draggable="true" ${displayStyle}>
-      <div class="setting-tooltip">${f.description}</div>
+      <div class="setting-tooltip">${esc(f.description)}</div>
       <div class="setting-info">
         <div class="drag-handle" title="Drag to reorder">
           ${dragHandleIcon}
         </div>
-        <span class="setting-icon">${f.icon}</span>
-        <span class="setting-label">${f.label}</span>
+        <span class="setting-icon">${esc(f.icon)}</span>
+        <span class="setting-label">${esc(f.label)}</span>
       </div>
       <div class="setting-actions">
         <button class="btn-hide ${isHidden ? 'is-hidden' : ''}" data-id="${f.id}" title="${hideTitle}">
@@ -1475,7 +1824,10 @@ function renderFeatureRow(f, isEnabled, isHidden, isVisible) {
 
 function initDragAndDrop() {
   const container = document.getElementById("settingsList");
-  if (!container) return;
+  if (!container || container.dataset.dndReady) return;
+  // Listeners live on the container, which is reused across re-renders,
+  // so attach them only once
+  container.dataset.dndReady = "1";
 
   let dragEl = null;
 
@@ -1490,19 +1842,19 @@ function initDragAndDrop() {
 
   container.addEventListener("dragover", (e) => {
     e.preventDefault();
+    if (!dragEl) return;
     const target = e.target.closest(".setting-item");
     if (!target || target === dragEl) return;
-    
+
     const rect = target.getBoundingClientRect();
     const next = (e.clientY - rect.top) / (rect.bottom - rect.top) > 0.5;
     container.insertBefore(dragEl, next ? target.nextSibling : target);
   });
 
   container.addEventListener("dragend", () => {
-    if (dragEl) {
-      dragEl.classList.remove("dragging");
-      dragEl = null;
-    }
+    if (!dragEl) return;
+    dragEl.classList.remove("dragging");
+    dragEl = null;
     container.classList.remove("reordering");
     saveNewOrder();
   });
@@ -1511,7 +1863,7 @@ function initDragAndDrop() {
 function saveNewOrder() {
   const items = Array.from(document.querySelectorAll("#settingsList .setting-item"));
   const newOrder = items.map(item => item.dataset.featureId);
-  
+
   chrome.storage.local.set({ feature_order: newOrder }, () => {
     updateNav();
   });
@@ -1525,80 +1877,29 @@ function loadSettings() {
     const container = document.getElementById("settingsList");
     if (!container) return;
 
-    let enabledCount = 0;
-    FEATURES.forEach(f => {
-      const isEnabled = data[f.storageKey] !== undefined ? data[f.storageKey] !== false : f.default;
-      if (isEnabled) enabledCount++;
-    });
+    const enabledCount = FEATURES.filter(f => isFeatureEnabled(f, data)).length;
 
     const headerTitle = document.querySelector("#page-settings .settings-header h2");
     if (headerTitle) {
       headerTitle.textContent = `${enabledCount} of ${FEATURES.length} features active`;
     }
 
-    const sortedFeatures = [...FEATURES].sort((a, b) => {
-      let idxA = order.indexOf(a.id);
-      let idxB = order.indexOf(b.id);
-      if (idxA === -1) idxA = 999;
-      if (idxB === -1) idxB = 999;
-      return idxA - idxB;
-    });
-
     let html = "";
-    sortedFeatures.forEach(f => {
-      const isEnabled = data[f.storageKey] !== undefined ? data[f.storageKey] !== false : f.default;
+    sortFeatures(order).forEach(f => {
       const isHidden = hiddenFeatures.includes(f.id);
       const isVisible = !isHidden || showHidden;
-      
-      html += renderFeatureRow(f, isEnabled, isHidden, isVisible);
+      html += renderFeatureRow(f, isFeatureEnabled(f, data), isHidden, isVisible);
     });
 
     container.innerHTML = html || `<div class="empty">No features to display</div>`;
     initDragAndDrop();
 
     container.querySelectorAll(".switch input").forEach(input => {
-      input.addEventListener("change", () => {
-        const item = input.closest(".setting-item");
-        const featureId = item.dataset.featureId;
-        const feature = FEATURES.find(f => f.id === featureId);
-        
-        chrome.storage.local.set({ [feature.storageKey]: input.checked }, () => {
-          if (featureId === "darkmode") {
-            chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-              if (tab) {
-                chrome.tabs.sendMessage(tab.id, { type: "darkmode_toggle" }).catch(() => {});
-              }
-            });
-          }
-          if (featureId === "nocookie") {
-            chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-              if (tab) chrome.tabs.sendMessage(tab.id, { type: "nocookie_toggle", enabled: input.checked }).catch(() => {});
-            });
-          }
-          if (featureId === "unhook") {
-            chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-              if (tab) chrome.tabs.sendMessage(tab.id, { type: "unhook_toggle", enabled: input.checked }).catch(() => {});
-            });
-          }
-          if (featureId === "xunhook") {
-            chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-              if (tab) chrome.tabs.sendMessage(tab.id, { type: "xunhook_toggle", enabled: input.checked }).catch(() => {});
-            });
-          }
-          if (featureId === "xdim") {
-            chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-              if (tab) chrome.tabs.sendMessage(tab.id, { type: "xdim_toggle", enabled: input.checked }).catch(() => {});
-            });
-          }
-          if (featureId === "jsonformat") {
-            chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-              if (tab) chrome.tabs.sendMessage(tab.id, { type: "jsonformat_toggle", enabled: input.checked }).catch(() => {});
-            });
-          }
-          
-          loadSettings();
-          updateNav();
-        });
+      input.addEventListener("change", async () => {
+        const featureId = input.closest(".setting-item").dataset.featureId;
+        await setFeaturesEnabled({ [featureId]: input.checked });
+        loadSettings();
+        updateNav();
       });
     });
 
@@ -1622,71 +1923,24 @@ function loadSettings() {
   });
 }
 
-document.getElementById("btnSelectAll").addEventListener("click", () => {
+async function setAllFeatures(enabled) {
   const updates = {};
-  FEATURES.forEach(f => {
-    updates[f.storageKey] = true;
-  });
-  chrome.storage.local.set(updates, () => {
-    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-      if (tab) {
-        chrome.tabs.sendMessage(tab.id, { type: "darkmode_toggle" }).catch(() => {});
-        chrome.tabs.sendMessage(tab.id, { type: "nocookie_toggle", enabled: true }).catch(() => {});
-        chrome.tabs.sendMessage(tab.id, { type: "unhook_toggle", enabled: true }).catch(() => {});
-        chrome.tabs.sendMessage(tab.id, { type: "xunhook_toggle", enabled: true }).catch(() => {});
-        chrome.tabs.sendMessage(tab.id, { type: "xdim_toggle", enabled: true }).catch(() => {});
-        chrome.tabs.sendMessage(tab.id, { type: "jsonformat_toggle", enabled: true }).catch(() => {});
-      }
-    });
-    loadSettings();
-    updateNav();
-  });
-});
+  FEATURES.forEach(f => { updates[f.id] = enabled; });
+  await setFeaturesEnabled(updates);
+  loadSettings();
+  updateNav();
+}
 
-document.getElementById("btnUnselectAll").addEventListener("click", () => {
-  const updates = {};
-  FEATURES.forEach(f => {
-    updates[f.storageKey] = false;
-  });
-  chrome.storage.local.set(updates, () => {
-    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-      if (tab) {
-        chrome.tabs.sendMessage(tab.id, { type: "darkmode_toggle" }).catch(() => {});
-        chrome.tabs.sendMessage(tab.id, { type: "nocookie_toggle", enabled: false }).catch(() => {});
-        chrome.tabs.sendMessage(tab.id, { type: "unhook_toggle", enabled: false }).catch(() => {});
-        chrome.tabs.sendMessage(tab.id, { type: "xunhook_toggle", enabled: false }).catch(() => {});
-        chrome.tabs.sendMessage(tab.id, { type: "xdim_toggle", enabled: false }).catch(() => {});
-        chrome.tabs.sendMessage(tab.id, { type: "jsonformat_toggle", enabled: false }).catch(() => {});
-      }
-    });
-    loadSettings();
-    updateNav();
-  });
-});
+document.getElementById("btnSelectAll").addEventListener("click", () => setAllFeatures(true));
+document.getElementById("btnUnselectAll").addEventListener("click", () => setAllFeatures(false));
 
 document.getElementById("btnToggleShowHidden").addEventListener("click", () => {
   showHidden = !showHidden;
   const btn = document.getElementById("btnToggleShowHidden");
-  if (showHidden) {
-    btn.classList.add("active");
-  } else {
-    btn.classList.remove("active");
-  }
+  btn.classList.toggle("active", showHidden);
   loadSettings();
 });
 
-// Initial layout & descriptions load
+// Initial layout & descriptions load (restores the last open tab)
 loadTabDescriptions();
-updateNav();
-
-// ═══════════════════════════════════
-//  Helpers
-// ═══════════════════════════════════
-function esc(s) {
-  const d = document.createElement("div");
-  d.textContent = s;
-  return d.innerHTML;
-}
-function escA(s) {
-  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
+updateNav(true);

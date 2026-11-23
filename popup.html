@@ -6,40 +6,45 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       width: 600px;
-      height: 500px;
+      height: 600px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: #1a1a2e;
       color: #e0e0e0;
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
       overflow: hidden;
     }
 
-    /* ── Top nav ── */
+    /* ── Side nav ── */
     .nav {
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
+      width: 110px;
       background: #0f0f23;
-      border-bottom: 1px solid #2a2a4a;
+      border-right: 1px solid #2a2a4a;
       flex-shrink: 0;
+      overflow-y: auto;
     }
+    .nav::-webkit-scrollbar { width: 4px; }
+    .nav::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
     .nav button {
-      width: calc(100% / 7);
-      padding: 9px 2px;
+      width: 100%;
+      padding: 9px 8px;
       background: none;
       border: none;
       color: #888;
       font-size: 11px;
       font-weight: 600;
       cursor: pointer;
-      border-bottom: 2px solid transparent;
+      border-left: 2px solid transparent;
       transition: all 0.2s;
+      text-align: left;
     }
     .nav button:hover { color: #ccc; }
     .nav button:focus { outline: none; }
     .nav button.active {
       color: #e94560;
-      border-bottom-color: #e94560;
+      border-left-color: #e94560;
     }
 
     /* ── Pages ── */
@@ -396,6 +401,21 @@
       font-size: 12px; color: #aaa; min-width: 36px;
       text-align: right;
     }
+    .ai-result {
+      display: none; background: #16213e; border-radius: 8px;
+      padding: 12px; font-size: 13px; line-height: 1.5; color: #ddd;
+      white-space: normal; word-wrap: break-word;
+    }
+    .ai-result.show { display: block; }
+    .ai-result b { color: #fff; }
+    .ai-result ul { margin: 4px 0; padding-left: 18px; }
+    .ai-result li { margin: 3px 0; }
+    .ai-result .ai-err { color: #e94560; }
+    .ai-result .ai-copy {
+      float: right; background: none; border: none; color: #e94560;
+      font-size: 11px; cursor: pointer; margin: -4px -4px 0 0;
+    }
+    .ai-result .ai-spin { color: #888; }
     .dark-scope {
       display: flex; gap: 6px; margin-bottom: 10px;
     }
@@ -560,6 +580,9 @@
       color: #4caf50; font-size: 14px; flex-shrink: 0;
     }
     .unhook-feature.off .check { color: #555; }
+    .unhook-feature.clickable { cursor: pointer; user-select: none; }
+    .unhook-feature.clickable:hover { background: #1b2a52; }
+    .unhook-feature.clickable.off { color: #777; }
 
     /* ── JS Toggle ── */
     .js-big-toggle {
@@ -962,11 +985,25 @@
     .drag-handle:active {
       cursor: grabbing;
     }
+    /* ── Cookie filter (CSS instead of inline handlers, which MV3 blocks) ── */
+    .cookie-filter-wrap { position: relative; flex: 1; display: flex; align-items: center; }
+    #cookieFilter {
+      width: 100%; padding: 4px 24px 4px 8px; font-size: 11px;
+      background: #0f1e3d; border: 1px solid #2a2a4a; border-radius: 4px;
+      color: #ddd; outline: none; transition: border-color 0.2s;
+    }
+    #cookieFilter:focus { border-color: #e94560; }
+    #btnClearCookieFilter {
+      position: absolute; right: 6px; background: none; border: none; color: #888;
+      cursor: pointer; font-size: 14px; display: none; line-height: 1; padding: 2px;
+      outline: none; font-weight: bold; transition: color 0.1s;
+    }
+    #btnClearCookieFilter:hover { color: #e94560; }
   </style>
 </head>
 <body>
 
-  <!-- Nav -->
+  <!-- Nav (built from FEATURES in popup.js, respecting Settings) -->
   <div class="nav" id="navBar"></div>
 
   <!-- ═══ Tab Cleaner Page ═══ -->
@@ -992,9 +1029,9 @@
     <div class="page-body" id="cookieBody">
       <div class="cookie-header" style="gap: 10px; align-items: center;">
         <div class="domain" id="cookieDomain">Loading...</div>
-        <div style="position: relative; flex: 1; display: flex; align-items: center;">
-          <input type="text" id="cookieFilter" placeholder="Filter cookies..." style="width: 100%; padding: 4px 24px 4px 8px; font-size: 11px; background: #0f1e3d; border: 1px solid #2a2a4a; border-radius: 4px; color: #ddd; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#e94560'" onblur="this.style.borderColor='#2a2a4a'">
-          <button id="btnClearCookieFilter" style="position: absolute; right: 6px; background: none; border: none; color: #888; cursor: pointer; font-size: 14px; display: none; line-height: 1; padding: 2px; outline: none; font-weight: bold; transition: color 0.1s;" onmouseover="this.style.color='#e94560'" onmouseout="this.style.color='#888'">&times;</button>
+        <div class="cookie-filter-wrap">
+          <input type="text" id="cookieFilter" placeholder="Filter cookies...">
+          <button id="btnClearCookieFilter" title="Clear filter">&times;</button>
         </div>
         <div class="count" id="cookieCount">0</div>
       </div>
@@ -1056,7 +1093,7 @@
           </div>
           <div class="tooltip-wrapper" style="flex: 1; height: 100%;">
             <button data-mode="off" class="pill-btn">OFF</button>
-            <span class="tooltip-content">Always force light theme</span>
+            <span class="tooltip-content">Never apply dark mode</span>
           </div>
           <div class="tooltip-wrapper" style="flex: 1; height: 100%;">
             <button data-mode="system" class="pill-btn">SYSTEM</button>
@@ -1141,6 +1178,106 @@
     </div>
   </div>
 
+  <!-- ═══ No Paywall Page ═══ -->
+  <div class="page" id="page-archive">
+    <div class="page-body">
+      <div class="unhook-big-toggle" style="padding: 10px 0 6px;">
+        <div class="yticon">🗄</div>
+      </div>
+
+      <div class="unhook-features">
+        <div class="unhook-feature"><span class="check">✓</span> Articles on these sites open on archive.is</div>
+        <div class="unhook-feature"><span class="check">✓</span> Homepages and section fronts are left alone</div>
+        <div class="unhook-feature"><span class="check">✓</span> Links clicked from archive.is open the original</div>
+      </div>
+
+      <textarea class="livecss-editor" id="archiveSites" style="min-height:160px;margin-top:10px" spellcheck="false" placeholder="nytimes.com&#10;wsj.com"></textarea>
+      <div class="xdim-note" id="archiveNote">One domain per line (subdomains included). Saved automatically.</div>
+    </div>
+  </div>
+
+  <!-- ═══ Photopea No Ads Page ═══ -->
+  <div class="page" id="page-photopea">
+    <div class="page-body">
+      <div class="unhook-big-toggle" style="padding: 10px 0 6px;">
+        <div class="yticon">🫛</div>
+      </div>
+
+      <div class="unhook-features">
+        <div class="unhook-feature"><span class="check">✓</span> Hide the ad column on photopea.com</div>
+        <div class="unhook-feature"><span class="check">✓</span> Editor expands to full window width</div>
+        <div class="unhook-feature"><span class="check">✓</span> No "Ad blocking detected" nag panel</div>
+      </div>
+
+      <div class="xdim-note" style="margin-top:10px">
+        Photopea sizes the editor for a 320px ad column; we tell it the window is 320px wider and hide the column.<br>
+        Open Photopea tabs reload when you turn it on or off in Settings.
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TikTok Login Skipper Page ═══ -->
+  <div class="page" id="page-tiktok">
+    <div class="page-body">
+      <div class="unhook-big-toggle" style="padding: 10px 0 6px;">
+        <div class="yticon">🎶</div>
+      </div>
+
+      <div class="unhook-features">
+        <div class="unhook-feature"><span class="check">✓</span> Auto-skip the "Log in to TikTok" popup</div>
+        <div class="unhook-feature"><span class="check">✓</span> No dark backdrop blocking the page</div>
+        <div class="unhook-feature"><span class="check">✓</span> Skips the "When's your birthday?" wall too</div>
+        <div class="unhook-feature"><span class="check">✓</span> Scrolling and clicking work again</div>
+      </div>
+
+      <div class="xdim-note" style="margin-top:10px">
+        Clicking TikTok's own Log in button still opens the login popup.
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ X Select Page ═══ -->
+  <div class="page" id="page-xselect">
+    <div class="page-body">
+      <div class="unhook-big-toggle" style="padding: 10px 0 6px;">
+        <div class="yticon" style="font-weight:800;font-family:-apple-system,sans-serif;">𝕏</div>
+      </div>
+
+      <div class="unhook-features">
+        <div class="unhook-feature"><span class="check">✓</span> Adds a checkbox to every reply on a post page</div>
+        <div class="unhook-feature"><span class="check">✓</span> Shift-click to select a whole range</div>
+        <div class="unhook-feature"><span class="check">✓</span> Hide, Block, or Hide + Block all selected at once</div>
+        <div class="unhook-feature"><span class="check">✓</span> Skips the post itself and your own replies</div>
+      </div>
+
+      <div class="xdim-note" style="margin-top:10px">
+        Batch-clean spam replies under your posts.<br>
+        Hide only works on replies to your own posts.
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ X Reply Page ═══ -->
+  <div class="page" id="page-xreply">
+    <div class="page-body">
+      <div class="unhook-big-toggle" style="padding: 10px 0 6px;">
+        <div class="yticon" style="font-weight:800;font-family:-apple-system,sans-serif;">𝕏</div>
+      </div>
+
+      <div class="unhook-features">
+        <div class="unhook-feature"><span class="check">✓</span> Auto-opens the audience picker when you start a post</div>
+        <div class="unhook-feature"><span class="check">✓</span> Selects "Accounts you follow and who they follow"</div>
+        <div class="unhook-feature"><span class="check">✓</span> Skips if you've already set the audience</div>
+        <div class="unhook-feature"><span class="check">✓</span> Manual changes in the picker are respected</div>
+      </div>
+
+      <div class="xdim-note" style="margin-top:10px">
+        Tightens default reply audience on new tweets.<br>
+        Turn off in Settings to leave the picker untouched.
+      </div>
+    </div>
+  </div>
+
   <!-- ═══ Cookie Consent (GDPR) Page ═══ -->
   <div class="page" id="page-nocookie">
     <div class="page-body">
@@ -1188,14 +1325,17 @@
       </div>
 
       <div class="unhook-features" id="unhookFeatures">
-        <div class="unhook-feature"><span class="check">✓</span> Black homepage — no feed</div>
-        <div class="unhook-feature"><span class="check">✓</span> No sidebar suggestions</div>
-        <div class="unhook-feature"><span class="check">✓</span> No end screen overlays</div>
-        <div class="unhook-feature"><span class="check">✓</span> No Shorts shelves</div>
-        <div class="unhook-feature"><span class="check">✓</span> Wider video player</div>
+        <div class="unhook-feature clickable" data-feature="homepage"><span class="check">✓</span> Black homepage — no feed</div>
+        <div class="unhook-feature clickable" data-feature="sidebar"><span class="check">✓</span> No sidebar suggestions</div>
+        <div class="unhook-feature clickable" data-feature="endscreen"><span class="check">✓</span> No end screen overlays</div>
+        <div class="unhook-feature clickable" data-feature="shorts"><span class="check">✓</span> No Shorts shelves</div>
+        <div class="unhook-feature clickable" data-feature="wider"><span class="check">✓</span> Wider video player</div>
       </div>
 
-      <div class="xdim-note" style="margin-top:10px" id="unhook-desc"></div>
+      <div class="xdim-note" style="margin-top:10px">
+        <span id="unhook-desc"></span><br>
+        Click a feature to toggle it on/off.
+      </div>
     </div>
   </div>
 
@@ -1261,6 +1401,47 @@
         <label>Access Secret</label>
         <input type="password" id="acrSecret" placeholder="your access secret" style="width:100%;padding:6px 8px;background:#0f1e3d;border:1px solid #2a2a4a;border-radius:4px;color:#ddd;font-size:12px;margin-bottom:6px;">
         <button class="btn-save" id="acrSaveBtn" style="margin-top:4px;padding:6px 14px;font-size:12px;">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ AI Summarize Page ═══ -->
+  <div class="page" id="page-summarize">
+    <div class="page-body">
+      <div class="dark-section">
+        <label>Provider</label>
+        <select id="aiProvider" style="width:100%;padding:6px 8px;background:#0f1e3d;border:1px solid #2a2a4a;border-radius:4px;color:#ddd;font-size:12px;">
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="xai">xAI (Grok)</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+        <select id="aiLength" style="flex-shrink:0;padding:6px 8px;background:#0f1e3d;border:1px solid #2a2a4a;border-radius:4px;color:#ddd;font-size:12px;">
+          <option value="brief">Brief</option>
+          <option value="bullets" selected>Bullets</option>
+          <option value="detailed">Detailed</option>
+        </select>
+        <button class="btn-save" id="summarizeBtn" style="flex:1;padding:8px;font-size:13px;">✨ Summarize this page</button>
+      </div>
+
+      <div class="ai-result" id="aiResult"></div>
+
+      <button id="aiSettingsBtn" style="background:none;border:none;color:#555;font-size:12px;cursor:pointer;margin-top:6px;">⚙️ API key & model</button>
+      <div class="dark-section" id="aiConfig" style="margin-top:8px;display:none">
+        <a id="aiSignupLink" href="#" target="_blank" style="display:block;text-align:center;padding:8px;margin-bottom:10px;background:#2a1525;border:1px solid #e94560;border-radius:6px;color:#e94560;font-size:12px;font-weight:600;text-decoration:none;">Get an API key →</a>
+        <label>API Key <span id="aiKeyHint" style="color:#555;"></span></label>
+        <input type="password" id="aiKey" placeholder="paste your key" style="width:100%;padding:6px 8px;background:#0f1e3d;border:1px solid #2a2a4a;border-radius:4px;color:#ddd;font-size:12px;margin-bottom:6px;">
+        <label>Model</label>
+        <input type="text" id="aiModel" placeholder="model name" style="width:100%;padding:6px 8px;background:#0f1e3d;border:1px solid #2a2a4a;border-radius:4px;color:#ddd;font-size:12px;margin-bottom:6px;">
+        <button class="btn-save" id="aiSaveBtn" style="margin-top:4px;padding:6px 14px;font-size:12px;">Save</button>
+        <div style="font-size:11px;color:#555;margin-top:8px;">Keys are stored locally in your browser and sent only to the provider you pick.</div>
+      </div>
+
+      <div class="xdim-note" style="margin-top:10px">
+        Reads the visible text of the current tab and<br>
+        summarizes it with your own AI provider key.
       </div>
     </div>
   </div>

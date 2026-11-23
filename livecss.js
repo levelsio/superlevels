@@ -34,5 +34,18 @@
         }
       });
     }
+    // Turned on/off in Settings: remove the CSS right away, or re-apply the
+    // saved CSS, so open pages match the setting without a reload
+    if (msg.type === "livecss_feature_toggle") {
+      if (!msg.enabled) {
+        const el = document.getElementById(STYLE_ID);
+        if (el) el.remove();
+      } else if (host) {
+        chrome.storage.local.get(["livecss_" + host], (data) => {
+          const css = data["livecss_" + host];
+          if (css) applyCSS(css);
+        });
+      }
+    }
   });
 })();

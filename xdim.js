@@ -26,6 +26,8 @@ function paletteFromHue(h, s) {
     bg:         `hsl(${h}, ${s}%, 13%)`,
     bgHover:    `hsl(${h}, ${Math.round(s * 0.74)}%, 16%)`,
     bgElevated: `hsl(${h}, ${Math.round(s * 0.71)}%, 20%)`,
+    bgHi:       `hsl(${h}, ${Math.round(s * 0.65)}%, 24%)`,
+    bgHi2:      `hsl(${h}, ${Math.round(s * 0.6)}%, 28%)`,
     backdrop:   `hsla(${h}, ${s}%, 13%, 0.85)`,
     text:       `hsl(${h}, ${Math.round(s * 0.32)}%, 60%)`,
     border:     `hsl(${h}, ${bSat}%, 26%)`,
@@ -44,27 +46,22 @@ function getActiveHueSat() {
 
 // ── Theme CSS ──────────────────────────────────────────────────────
 
-function buildThemeCSS() {
-  const { hue: h, sat: s } = getActiveHueSat();
-  const p = paletteFromHue(h, s);
+// Vars for X's newer design system (x-web / Chat), set wherever data-theme="dark"
+function darkVarsCSS(p) {
   return `
-  html.${DIM_CLASS} {
-    --xdm-bg: ${p.bg};
-    --xdm-bg-hover: ${p.bgHover};
-    --xdm-bg-elevated: ${p.bgElevated};
-    --xdm-backdrop: ${p.backdrop};
-    --xdm-text: ${p.text};
-    --xdm-border: ${p.border};
-  }
-  html.${DIM_CLASS} body.LightsOut {
-    --color: var(--xdm-text);
-    --border: ${p.borderRaw};
-    --input: ${p.borderRaw};
-    --border-color: var(--xdm-border);
-  }
-  html.${DIM_CLASS}[data-theme="dark"],
-  html.${DIM_CLASS} [data-theme="dark"] {
     --background: ${p.bgRaw};
+    --popover: ${p.bgRaw};
+    --secondary: ${p.borderRaw};
+    --muted: ${p.borderRaw};
+    --color-modal-background: ${p.bgRaw};
+    --x-bg-primary: ${p.bg};
+    --x-bg-secondary: ${p.bgHover};
+    --x-bg-tertiary: ${p.bgElevated};
+    --x-bg-modal: ${p.bgHover};
+    --x-bg-sheets: ${p.bgHover};
+    --x-btn-secondary: ${p.bgElevated};
+    --x-btn-secondary-hover: ${p.bgHi};
+    --x-btn-secondary-pressed: ${p.bgHi2};
     --border: ${p.borderRaw};
     --input: ${p.borderRaw};
     --muted-foreground: ${p.mutedRaw};
@@ -73,7 +70,45 @@ function buildThemeCSS() {
     --color-gray-50: ${p.borderRaw};
     --color-gray-100: ${p.borderRaw};
     --color-gray-700: ${p.grayRaw60};
-    --color-gray-800: ${p.grayRaw50};
+    --color-gray-800: ${p.grayRaw50};`;
+}
+
+function activePalette() {
+  const { hue: h, sat: s } = getActiveHueSat();
+  return paletteFromHue(h, s);
+}
+
+function buildThemeCSS() {
+  const p = activePalette();
+  return `
+  html.${DIM_CLASS} {
+    --xdm-bg: ${p.bg};
+    --xdm-bg-hover: ${p.bgHover};
+    --xdm-bg-elevated: ${p.bgElevated};
+    --xdm-backdrop: ${p.backdrop};
+    --xdm-text: ${p.text};
+    --xdm-border: ${p.border};
+    --x-bg-primary: ${p.bg};
+  }
+  html.${DIM_CLASS} body.LightsOut {
+    --x-bg-primary: ${p.bg};
+    --color: var(--xdm-text);
+    --border: ${p.borderRaw};
+    --input: ${p.borderRaw};
+    --border-color: var(--xdm-border);
+  }
+  html.${DIM_CLASS}[data-theme="dark"],
+  html.${DIM_CLASS} [data-theme="dark"],
+  html.${DIM_CLASS} .dark-theme {${darkVarsCSS(p)}
+  }`;
+}
+
+// Chat renders inside a shadow root, which page CSS can't reach.
+// :host prefix out-specifies the shadow's own adopted [data-theme=dark] sheet.
+function buildShadowCSS() {
+  return `
+  :host [data-theme="dark"],
+  :host .dark-theme {${darkVarsCSS(activePalette())}
   }`;
 }
 
@@ -83,16 +118,24 @@ const STATIC_CSS = `
     background-color: var(--xdm-bg) !important;
   }
   html.${DIM_CLASS} [style*="background-color: rgb(0, 0, 0)"],
-  html.${DIM_CLASS} [style*="background-color: rgba(0, 0, 0, 1)"] {
+  html.${DIM_CLASS} [style*="background-color: rgba(0, 0, 0, 1)"],
+  html.${DIM_CLASS} [style*="background-color: rgb(20, 20, 20)"] {
     background-color: var(--xdm-bg) !important;
   }
-  html.${DIM_CLASS} [style*="background-color: rgb(24, 24, 27)"] {
+  html.${DIM_CLASS} [style*="background-color: rgb(24, 24, 27)"],
+  html.${DIM_CLASS} [style*="background-color: rgb(22, 24, 28)"],
+  html.${DIM_CLASS} [style*="background-color: rgb(15, 20, 25)"] {
     background-color: var(--xdm-bg-hover) !important;
   }
-  html.${DIM_CLASS} [role="link"] > div > div:first-child div:has(> svg:only-child) {
+  /* Modal dialogs (post composer, etc.) — class-based dark bg */
+  html.${DIM_CLASS} [role="dialog"][aria-modal="true"] {
+    background-color: var(--xdm-bg) !important;
+  }
+  html.${DIM_CLASS} [role="link"] > div > div:first-child div:has(> svg:only-child):not(:has(> svg[data-icon])) {
     background-color: var(--xdm-bg-elevated) !important;
   }
   html.${DIM_CLASS} .r-kemksi,
+  html.${DIM_CLASS} .r-cl2sl0,
   html.${DIM_CLASS} .r-1niwhzg,
   html.${DIM_CLASS} .r-yfoy6g,
   html.${DIM_CLASS} .r-14lw9ot {
@@ -187,6 +230,72 @@ function ensureBaseCSS() {
   if (style.textContent !== css) style.textContent = css;
 }
 
+// ── Shadow root CSS (X Chat) ──────────────────────────────────────
+
+const SHADOW_STYLE_ID = "x-dim-shadow-ext";
+const _shadowRoots = new Set();
+let _shadowTimer = 0;
+
+function injectShadowCSS(root) {
+  _shadowRoots.add(root);
+  const css = buildShadowCSS();
+  let style = root.getElementById(SHADOW_STYLE_ID);
+  if (!style) {
+    style = document.createElement("style");
+    style.id = SHADOW_STYLE_ID;
+    root.appendChild(style);
+  }
+  if (style.textContent !== css) style.textContent = css;
+}
+
+// Chat's shadow hosts are plain divs with no stable marker (X dropped the
+// xchatEmbedRoute testid), so treat any shadow root as a candidate — the CSS
+// only matches [data-theme="dark"] inside it
+function scanShadowHosts(root) {
+  if (root.shadowRoot) injectShadowCSS(root.shadowRoot);
+  for (const el of root.querySelectorAll("div")) {
+    if (el.shadowRoot) injectShadowCSS(el.shadowRoot);
+  }
+}
+
+function scanShadowRoots() {
+  scanShadowHosts(document);
+}
+
+let _shadowRetryFrame = 0;
+const _shadowRetryNodes = new Set();
+
+// Check freshly added nodes right away, then again next frame in case
+// attachShadow ran after insertion, so Chat never paints black
+function scanAddedForShadow(nodes) {
+  for (const n of nodes) {
+    if (n.nodeType !== 1) continue;
+    scanShadowHosts(n);
+    _shadowRetryNodes.add(n);
+  }
+  if (_shadowRetryNodes.size && !_shadowRetryFrame) {
+    _shadowRetryFrame = requestAnimationFrame(() => {
+      _shadowRetryFrame = 0;
+      for (const n of _shadowRetryNodes) if (n.isConnected) scanShadowHosts(n);
+      _shadowRetryNodes.clear();
+    });
+  }
+}
+
+function removeShadowCSS() {
+  for (const root of _shadowRoots) root.getElementById(SHADOW_STYLE_ID)?.remove();
+  _shadowRoots.clear();
+}
+
+// attachShadow and shadow content changes don't reach our MutationObserver, so poll
+function startShadowTimer() {
+  if (!_shadowTimer) _shadowTimer = setInterval(scanShadowRoots, 1000);
+}
+
+function stopShadowTimer() {
+  if (_shadowTimer) { clearInterval(_shadowTimer); _shadowTimer = 0; }
+}
+
 // Inject CSS immediately (gated by html.x-dim-active so inert until class added)
 ensureBaseCSS();
 
@@ -243,6 +352,8 @@ function applyDim() {
   document.documentElement.classList.add(DIM_CLASS);
   syncThemeColor();
   startThemeColorObserver();
+  scanShadowRoots();
+  startShadowTimer();
   if (document.body) queueScan([document.body]);
 }
 
@@ -250,6 +361,8 @@ function removeDim() {
   document.documentElement.classList.remove(DIM_CLASS);
   stopThemeColorObserver();
   restoreThemeColor();
+  stopShadowTimer();
+  removeShadowCSS();
   if (_scanFrame) { cancelAnimationFrame(_scanFrame); _scanFrame = 0; _pending.clear(); }
   for (const el of document.querySelectorAll(".xdm-dimmed, .xdm-dimmed-elevated")) {
     el.classList.remove("xdm-dimmed", "xdm-dimmed-elevated");
@@ -262,9 +375,16 @@ let _bodyObserver;
 let _suspendedForLight = false;
 let _seenLightsOut = false;
 
+function isXDark() {
+  return document.body.classList.contains("LightsOut") ||
+    document.documentElement.getAttribute("data-theme") === "dark";
+}
+
 function syncDimWithTheme() {
   if (!_enabled || !document.body) return;
-  const hasLightsOut = document.body.classList.contains("LightsOut");
+  // Old X UI marks dark mode with body.LightsOut; the newer x-web UI (e.g. Chat)
+  // only sets data-theme="dark" on <html>
+  const hasLightsOut = isXDark();
   const dimActive = document.documentElement.classList.contains(DIM_CLASS);
   if (hasLightsOut) {
     _suspendedForLight = false;
@@ -280,12 +400,13 @@ function syncDimWithTheme() {
 
 function startBodyObserver() {
   if (_bodyObserver || !document.body) return;
-  if (document.body.classList.contains("LightsOut")) _seenLightsOut = true;
+  if (isXDark()) _seenLightsOut = true;
   _bodyObserver = new MutationObserver(() => {
-    if (document.body.classList.contains("LightsOut")) _seenLightsOut = true;
+    if (isXDark()) _seenLightsOut = true;
     syncDimWithTheme();
   });
   _bodyObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  _bodyObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 }
 
 function stopBodyObserver() {
@@ -317,12 +438,20 @@ function dimSubtree(root) {
   }
 }
 
+function shouldUseComputedBg(el) {
+  if (el.classList.contains("jf-element")) return true;
+  // Dialogs / modals frequently use class-based backgrounds (no inline style)
+  if (el.matches?.('[role="dialog"], [aria-modal="true"], [data-testid="DMDrawer"], [data-testid="sheetDialog"]')) return true;
+  if (el.closest?.('[role="dialog"], [aria-modal="true"]')) return true;
+  return false;
+}
+
 function dimElement(el) {
   if (!el || el.nodeType !== 1 || el.classList.contains("xdm-dimmed") || el.classList.contains("xdm-dimmed-elevated")) return;
-  const bg = el.classList.contains("jf-element")
+  const bg = shouldUseComputedBg(el)
     ? (() => { try { return getComputedStyle(el).backgroundColor; } catch { return ""; } })()
     : el.style.backgroundColor;
-  if (bg === "rgb(0, 0, 0)" || bg === "rgba(0, 0, 0, 1)") {
+  if (bg === "rgb(0, 0, 0)" || bg === "rgba(0, 0, 0, 1)" || bg === "rgb(20, 20, 20)") {
     el.classList.add("xdm-dimmed");
   } else if (bg === "rgb(24, 24, 27)") {
     el.classList.add("xdm-dimmed-elevated");
@@ -342,7 +471,12 @@ function startObserver() {
         applyDim();
       }
       if (_enabled && document.documentElement.classList.contains(DIM_CLASS)) {
-        for (const m of mutations) { if (m.addedNodes.length) queueScan(m.addedNodes); }
+        for (const m of mutations) {
+          if (!m.addedNodes.length) continue;
+          queueScan(m.addedNodes);
+          // Catch Chat's shadow host the moment it mounts instead of waiting for the poll
+          scanAddedForShadow(m.addedNodes);
+        }
       }
       if (_enabled && document.body && !_bodyObserver) startBodyObserver();
     } catch {
@@ -403,6 +537,7 @@ chrome.storage.onChanged.addListener((changes) => {
     if (changes.xdim_customHue) _customHue = changes.xdim_customHue.newValue ?? 210;
     ensureBaseCSS();
     syncThemeColor();
+    if (document.documentElement.classList.contains(DIM_CLASS)) scanShadowRoots();
   }
 });
 

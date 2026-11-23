@@ -3,29 +3,6 @@
 //  Auto-detects pure JSON pages and formats with syntax highlighting
 // ═══════════════════════════════════
 (() => {
-  if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
-    window.chrome = {
-      storage: {
-        local: {
-          get: (keys, cb) => {
-            const res = {};
-            if (Array.isArray(keys)) {
-              keys.forEach(k => { res[k] = true; });
-            } else if (typeof keys === "string") {
-              res[keys] = true;
-            }
-            cb(res);
-          }
-        }
-      },
-      runtime: {
-        onMessage: {
-          addListener: () => {}
-        }
-      }
-    };
-  }
-
   const STYLE_ID = "sl-jsonformat";
 
   function isJsonPage() {
@@ -264,13 +241,20 @@
           el.setAttribute("data-orig", el.innerHTML);
 
           // Escape HTML and highlight matches preserving case
+          // Split the raw text on matches first, then escape each piece, so
+          // the search never matches inside HTML entities like &amp;
           const escapedQuery = query.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
           const regex = new RegExp(`(${escapedQuery})`, 'gi');
-          el.innerHTML = el.textContent
+          const escHtml = (str) => str
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(regex, `<mark style="background:#e94560; color:#fff; padding:0 2px; border-radius:2px;">$1</mark>`);
+            .replace(/>/g, "&gt;");
+          el.innerHTML = text
+            .split(regex)
+            .map((part, i) => (i % 2 === 1
+              ? `<mark style="background:#e94560; color:#fff; padding:0 2px; border-radius:2px;">${escHtml(part)}</mark>`
+              : escHtml(part)))
+            .join("");
 
           // 3. Expand parent blocks
           let parent = el.parentElement;
