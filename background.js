@@ -4,6 +4,23 @@ const CHECK_INTERVAL_MIN = 1;
 // { tabId: lastActiveTimestamp }
 const tabActivity = {};
 
+let redirectsEnabled = true;
+let pipEnabled = true;
+
+chrome.storage.local.get(["feature_redirects_enabled", "feature_pip_enabled"], (data) => {
+  redirectsEnabled = data.feature_redirects_enabled !== false;
+  pipEnabled = data.feature_pip_enabled !== false;
+});
+
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes.feature_redirects_enabled) {
+    redirectsEnabled = changes.feature_redirects_enabled.newValue !== false;
+  }
+  if (changes.feature_pip_enabled) {
+    pipEnabled = changes.feature_pip_enabled.newValue !== false;
+  }
+});
+
 // Record activity for a tab
 function markActive(tabId) {
   tabActivity[tabId] = Date.now();
@@ -87,13 +104,15 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (tab.url) {
       try {
         const host = new URL(tab.url).hostname;
-        if (
-          exclusions.some(
-            (ex) => host === ex || host.endsWith("." + ex)
-          )
-        ) {
-          continue;
-        }
+        // "exact:host" entries match only that host; plain entries also
+        // match every subdomain (the original behavior)
+        const isExcluded = exclusions.some((ex) => {
+          if (ex.startsWith("exact:")) {
+            return host === ex.substring(6);
+          }
+          return host === ex || host.endsWith("." + ex);
+        });
+        if (isExcluded) continue;
       } catch {}
     }
 
@@ -133,6 +152,7 @@ const redirectData = {};
 
 // When a new main-frame navigation starts, reset the chain
 chrome.webNavigation.onBeforeNavigate.addListener((details) => {
+  if (!redirectsEnabled) return;
   if (details.frameId !== 0) return;
   redirectData[details.tabId] = { chain: [], finalUrl: null, finalStatus: null };
 });
@@ -140,6 +160,7 @@ chrome.webNavigation.onBeforeNavigate.addListener((details) => {
 // Capture each redirect hop
 chrome.webRequest.onBeforeRedirect.addListener(
   (details) => {
+    if (!redirectsEnabled) return;
     if (details.type !== "main_frame") return;
     if (!redirectData[details.tabId]) {
       redirectData[details.tabId] = { chain: [], finalUrl: null, finalStatus: null };
@@ -157,6 +178,7 @@ chrome.webRequest.onBeforeRedirect.addListener(
 // Capture final completed request
 chrome.webRequest.onCompleted.addListener(
   (details) => {
+    if (!redirectsEnabled) return;
     if (details.type !== "main_frame") return;
     if (!redirectData[details.tabId]) {
       redirectData[details.tabId] = { chain: [], finalUrl: null, finalStatus: null };
@@ -178,6 +200,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse(redirectData[msg.tabId] || { chain: [], finalUrl: null, finalStatus: null });
   }
   if (msg.type === "pip") {
+    if (!pipEnabled) {
+      sendResponse({ error: "Picture-in-Picture is disabled in settings" });
+      return;
+    }
     chrome.scripting.executeScript({
       target: { tabId: msg.tabId },
       func: () => {

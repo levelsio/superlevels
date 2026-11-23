@@ -149,16 +149,30 @@
     setTimeout(tryClick, 5000);
   }
 
+  function checkAndActivate() {
+    const host = window.location.hostname;
+    chrome.storage.local.get(["nocookie_enabled", "nocookie_exclusions"], (data) => {
+      if (data.nocookie_enabled === false) {
+        removeCSS();
+        return;
+      }
+      const exclusions = data.nocookie_exclusions || [];
+      const isExcluded = exclusions.some(ex => host === ex || host.endsWith("." + ex));
+      if (isExcluded) {
+        removeCSS();
+      } else {
+        activate();
+      }
+    });
+  }
+
   // Check storage and apply
-  chrome.storage.local.get(["nocookie_enabled"], (data) => {
-    if (data.nocookie_enabled !== false) activate();
-  });
+  checkAndActivate();
 
   // Listen for toggle from popup
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.type === "nocookie_toggle") {
-      if (msg.enabled) activate();
-      else removeCSS();
+    if (msg.type === "nocookie_toggle" || msg.type === "nocookie_exclusions_updated") {
+      checkAndActivate();
     }
   });
 })();

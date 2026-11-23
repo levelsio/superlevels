@@ -114,21 +114,38 @@
   const globalKey = "darkmode_global";
   const pageDarkKey = "darkmode_pageIsDark_" + host;
 
-  // Load state as early as possible to prevent flash
-  chrome.storage.local.get(
-    [storageKey, globalKey, "darkmode_brightness", pageDarkKey],
-    (data) => {
-      const siteState = data[storageKey];
-      const globalState = data[globalKey];
-      const enabled =
-        siteState !== undefined ? siteState : globalState || false;
-      const brightness = data.darkmode_brightness || 100;
-      if (!enabled) return;
+  // Stored values: true/"on" = always dark, false/"off" = never, "system" =
+  // follow the OS light/dark setting. Old boolean values keep working.
+  function normalizeMode(raw) {
+    if (raw === true || raw === "on") return "on";
+    if (raw === "system") return "system";
+    return "off";
+  }
 
-      // Skip immediately if we've previously detected this site as natively dark
-      if (data[pageDarkKey]) return;
+  const systemDark = window.matchMedia
+    ? window.matchMedia("(prefers-color-scheme: dark)")
+    : null;
 
-      applyDarkMode(true, brightness);
+  let currentMode = "off";
+  let currentBrightness = 100;
+  let featureEnabled = true;
+
+  // Turn dark mode on, unless the page is already dark by its own styles.
+  // fresh=true ignores the cached "this site is natively dark" result and
+  // checks the page again (used when the user changes a setting).
+  function enableUnlessNativelyDark(fresh) {
+    chrome.storage.local.get([pageDarkKey], (data) => {
+      if (!fresh && data[pageDarkKey]) {
+        applyDarkMode(false, 0);
+        return;
+      }
+      if (fresh && pageBgIsDark()) {
+        applyDarkMode(false, 0);
+        chrome.storage.local.set({ [pageDarkKey]: true });
+        return;
+      }
+      if (fresh) chrome.storage.local.remove(pageDarkKey);
+      applyDarkMode(true, currentBrightness);
 
       // Re-verify once body styles are computed
       const recheck = () => {
@@ -142,28 +159,53 @@
       } else {
         recheck();
       }
-    }
-  );
+    });
+  }
+
+  function shouldBeDark() {
+    if (!featureEnabled) return false;
+    if (currentMode === "on") return true;
+    if (currentMode === "system") return !!(systemDark && systemDark.matches);
+    return false;
+  }
+
+  function evaluateAndApply(fresh) {
+    chrome.storage.local.get(
+      ["feature_darkmode_enabled", storageKey, globalKey, "darkmode_brightness"],
+      (data) => {
+        featureEnabled = data.feature_darkmode_enabled !== false;
+        // Per-site overrides global. If per-site is undefined, fall back to global.
+        const rawSite = data[storageKey];
+        currentMode = normalizeMode(rawSite !== undefined ? rawSite : data[globalKey]);
+        currentBrightness = data.darkmode_brightness || 100;
+
+        if (shouldBeDark()) {
+          enableUnlessNativelyDark(fresh);
+        } else {
+          applyDarkMode(false, 0);
+          if (fresh) chrome.storage.local.remove(pageDarkKey);
+        }
+      }
+    );
+  }
+
+  // Load state as early as possible to prevent flash
+  evaluateAndApply(false);
+
+  // Follow the system light/dark setting live when in "system" mode
+  if (systemDark && systemDark.addEventListener) {
+    systemDark.addEventListener("change", () => {
+      if (featureEnabled && currentMode === "system") evaluateAndApply(false);
+    });
+  }
 
   // Listen for toggle messages from popup
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === "darkmode_toggle") {
-      if (!msg.enabled) {
-        applyDarkMode(false, 0);
-        chrome.storage.local.remove(pageDarkKey);
-        sendResponse({ ok: true, skipped: false });
-        return;
-      }
-      // Enabling: skip if the page is already dark by its own styles
-      if (pageBgIsDark()) {
-        applyDarkMode(false, 0);
-        chrome.storage.local.set({ [pageDarkKey]: true });
-        sendResponse({ ok: true, skipped: true });
-      } else {
-        chrome.storage.local.remove(pageDarkKey);
-        applyDarkMode(true, msg.brightness || 100);
-        sendResponse({ ok: true, skipped: false });
-      }
+      // The popup saves the new state first; re-read it and re-check the page
+      evaluateAndApply(true);
+      sendResponse({ ok: true });
+      return;
     }
     if (msg.type === "darkmode_query") {
       sendResponse({
