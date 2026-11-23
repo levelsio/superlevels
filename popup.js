@@ -1,6 +1,66 @@
 // ═══════════════════════════════════
-//  Navigation
+//  Navigation & Customization Setup
 // ═══════════════════════════════════
+// Every feature, in default menu order. storageKey is the real on/off switch
+// the feature's own code reads, so turning a feature off in Settings really
+// stops it (the background worker / content scripts check the same key).
+const FEATURES = [
+  { id: "tabcleaner", label: "Tab Cleaner", icon: "🚮", navLabel: "Tabs", storageKey: "enabled", default: true, hasTab: true, description: "Automatically closes inactive tabs after a configurable timeout. Set excluded hosts to keep important tabs alive. View and re-open recently closed tabs." },
+  { id: "cookies", label: "Cookie Editor", icon: "🍪", navLabel: "Cookies", storageKey: "feature_cookies_enabled", default: true, hasTab: true, description: "Full cookie manager for the current site. View, edit, add, and delete cookies. Export cookies as JSON." },
+  { id: "redirects", label: "Redirect Tracer", icon: "🔀", navLabel: "Redirects", storageKey: "feature_redirects_enabled", default: true, hasTab: true, description: "See every redirect hop your browser took to reach the current page. Shows status codes with a visual chain." },
+  { id: "darkmode", label: "Dark Mode", icon: "🌙", navLabel: "Dark", storageKey: "feature_darkmode_enabled", default: true, hasTab: true, description: "Instant dark mode for any website using CSS filter inversion. Adjustable brightness. Toggle per-site, globally, or follow system theme." },
+  { id: "xdim", label: "𝕏 Dim Mode", icon: "𝕏", navLabel: "Dim", storageKey: "xdim_enabled", default: false, hasTab: true, description: "Applies a custom dim theme to X / Twitter. Choose a theme or set a custom hue for less eye strain." },
+  { id: "xunhook", label: "𝕏 Unhook", icon: "𝕏", navLabel: "Unhook", storageKey: "xunhook_enabled", default: true, hasTab: true, description: "Removes X / Twitter distractions like sidebar panels (trends, news), keeping search and primary navigation clear." },
+  { id: "xreply", label: "𝕏 Reply Audience", icon: "𝕏", navLabel: "Reply", storageKey: "xreply_enabled", default: true, hasTab: true, description: "Auto-selects \"Accounts you follow and who they follow\" as the reply audience when you start a new post on X." },
+  { id: "xselect", label: "𝕏 Multi-Select", icon: "𝕏", navLabel: "Select", storageKey: "xselect_enabled", default: true, hasTab: true, description: "Adds checkboxes to replies on X so you can Hide, Block, or Hide + Block many replies at once." },
+  { id: "photopea", label: "Photopea No Ads", icon: "🫛", navLabel: "Photopea", storageKey: "photopea_enabled", default: true, hasTab: true, description: "Hides the ad column on photopea.com and expands the editor to the full window width." },
+  { id: "tiktok", label: "TikTok Login Skipper", icon: "🎶", navLabel: "TikTok", storageKey: "tiktok_enabled", default: true, hasTab: true, description: "Auto-skips TikTok's login and birthday popups so you can scroll and click without an account." },
+  { id: "archive", label: "No Paywall", icon: "🗄", navLabel: "No paywall", storageKey: "archive_enabled", default: true, hasTab: true, description: "Opens articles on listed paywalled news sites on archive.is instead. Homepages and section fronts are left alone." },
+  { id: "jstoggle", label: "JS Toggle", icon: "⚡", navLabel: "JS", storageKey: "feature_jstoggle_enabled", default: true, hasTab: true, description: "Disable JavaScript for the current site. The page will reload when toggled. Turning this feature off does not re-enable JavaScript on sites you already blocked." },
+  { id: "nocookie", label: "Cookies=OK (GDPR Consent)", icon: "🚫", navLabel: "Cookies=OK", storageKey: "nocookie_enabled", default: true, hasTab: true, description: "Auto-dismisses cookie consent popups. Hides banners via CSS and auto-clicks accept buttons for common consent frameworks." },
+  { id: "livecss", label: "CSS Editor", icon: "🎨", navLabel: "CSS", storageKey: "feature_livecss_enabled", default: true, hasTab: true, description: "Write custom CSS for any website, applied in real-time as you type. Saved per-domain." },
+  { id: "unhook", label: "YouTube Unhook", icon: "📺", navLabel: "YT Unhook", storageKey: "unhook_enabled", default: true, hasTab: true, description: "Removes YouTube distractions: no homepage feed, no sidebar suggestions, no end screen overlays, no Shorts." },
+  { id: "music", label: "Music Recognizer", icon: "🎵", navLabel: "Music", storageKey: "feature_music_enabled", default: true, hasTab: true, description: "Shazam-like music identification for any tab. Captures audio and identifies the song via ACRCloud." },
+  { id: "summarize", label: "AI Summarize", icon: "✨", navLabel: "Summarize", storageKey: "feature_summarize_enabled", default: true, hasTab: true, description: "Summarizes the current page with OpenAI, Anthropic, or xAI using your own API key." },
+  { id: "pip", label: "Picture-in-Picture", icon: "🖼", navLabel: "PiP", storageKey: "feature_pip_enabled", default: true, hasTab: true, description: "Pops the largest video on the current tab into a floating PiP window. Click again to exit." },
+  { id: "jsonformat", label: "JSON Formatter", icon: "{}", navLabel: "JSON", storageKey: "jsonformat_enabled", default: true, hasTab: true, description: "Auto-detects pure JSON response pages and formats them with syntax highlighting, collapsible sections, and a dark theme." },
+  { id: "gmaps", label: "Google Maps Links", icon: "🗺", navLabel: "", storageKey: "feature_gmaps_enabled", default: true, hasTab: false, description: "Re-adds clickable Google Maps links and map preview cards to Google Search results. Takes effect on the next Google page load." },
+  { id: "viewimage", label: "View Image Button", icon: "🖼", navLabel: "", storageKey: "feature_viewimage_enabled", default: true, hasTab: false, description: "Adds a 'View Image' button back to Google Images, linking directly to the full-size original image. Takes effect on the next Google page load." }
+];
+
+function isFeatureEnabled(f, data) {
+  return data[f.storageKey] !== undefined ? data[f.storageKey] !== false : f.default;
+}
+
+function sortFeatures(order) {
+  return [...FEATURES].sort((a, b) => {
+    let idxA = order.indexOf(a.id);
+    let idxB = order.indexOf(b.id);
+    if (idxA === -1) idxA = 999;
+    if (idxB === -1) idxB = 999;
+    return idxA - idxB;
+  });
+}
+
+function loadTabDescriptions() {
+  const mappings = {
+    "nocookie-desc": "nocookie",
+    "jsonformat-desc": "jsonformat",
+    "unhook-desc": "unhook",
+    "xunhook-desc": "xunhook",
+    "xdim-desc": "xdim"
+  };
+  for (const [elementId, featureId] of Object.entries(mappings)) {
+    const el = document.getElementById(elementId);
+    if (el) {
+      const feat = FEATURES.find(f => f.id === featureId);
+      if (feat) {
+        el.textContent = feat.description;
+      }
+    }
+  }
+}
+
 function switchToPage(page) {
   document.querySelectorAll(".nav button").forEach((b) => b.classList.remove("active"));
   document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
@@ -27,45 +87,77 @@ function switchToPage(page) {
     else if (page === "jsonformat") loadJsonFormat();
     else if (page === "summarize") loadSummarize();
     else if (page === "music") { loadMusicHistory(); loadAcrFields(); }
+    else if (page === "settings") loadSettings();
   };
   if (typeof requestAnimationFrame === "function") requestAnimationFrame(load);
   else setTimeout(load, 0);
   chrome.storage.local.set({ last_tab: page });
 }
 
-document.querySelectorAll(".nav button").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    switchToPage(btn.dataset.page);
-    // Clicking the PiP tab toggles PiP right away (needs the user gesture,
-    // so only on a real click — not when restoring last_tab)
-    if (btn.dataset.page === "pip") enterPiP();
-  });
-});
+// Builds the nav from FEATURES: skips features that are turned off or hidden,
+// uses the saved custom order, and always ends with Settings.
+// restoreTab=true opens the last used tab (popup start); otherwise the
+// current page stays open if it is still in the nav.
+function updateNav(restoreTab) {
+  const keys = FEATURES.map(f => f.storageKey).concat(["hidden_features", "last_tab", "feature_order"]);
+  chrome.storage.local.get(keys, (data) => {
+    const hiddenFeatures = data.hidden_features || [];
+    const order = data.feature_order || FEATURES.map(f => f.id);
+    const current = document.querySelector(".nav button.active");
+    let activePage = restoreTab || !current
+      ? (data.last_tab || "tabcleaner")
+      : current.dataset.page;
 
-// Restore last open tab — deferred so the default page paints first
-requestAnimationFrame(() => {
-  chrome.storage.local.get(["last_tab"], (data) => {
-    if (data.last_tab) switchToPage(data.last_tab);
+    const navBar = document.getElementById("navBar");
+    if (!navBar) return;
+
+    navBar.innerHTML = "";
+    let firstVisiblePage = "";
+    const addButton = (page, text) => {
+      const btn = document.createElement("button");
+      btn.dataset.page = page;
+      btn.textContent = text;
+      btn.addEventListener("click", () => {
+        switchToPage(page);
+        // Clicking the PiP tab toggles PiP right away (needs the user gesture,
+        // so only on a real click — not when restoring last_tab)
+        if (page === "pip") enterPiP();
+      });
+      navBar.appendChild(btn);
+    };
+
+    sortFeatures(order).forEach((f) => {
+      if (!f.hasTab) return;
+      if (!isFeatureEnabled(f, data) || hiddenFeatures.includes(f.id)) return;
+      addButton(f.id, `${f.icon} ${f.navLabel}`);
+      if (!firstVisiblePage) firstVisiblePage = f.id;
+    });
+    addButton("settings", "⚙️ Settings");
+
+    const target = navBar.querySelector(`button[data-page="${activePage}"]`)
+      ? activePage
+      : (firstVisiblePage || "settings");
+    // Repaint the active state; only reload page data when the page changes
+    const pageEl = document.getElementById("page-" + target);
+    if (pageEl && pageEl.classList.contains("active") && !restoreTab) {
+      navBar.querySelector(`button[data-page="${target}"]`).classList.add("active");
+    } else {
+      switchToPage(target);
+    }
   });
-});
+}
 
 // ═══════════════════════════════════
 //  Tab Cleaner
 // ═══════════════════════════════════
-const enabledEl = document.getElementById("enabled");
 const timeoutEl = document.getElementById("timeout");
 const hostInput = document.getElementById("hostInput");
 const addBtn = document.getElementById("addBtn");
 const listEl = document.getElementById("list");
 
-chrome.storage.local.get(["enabled", "timeoutMin", "exclusions"], (data) => {
-  enabledEl.checked = data.enabled !== false;
+chrome.storage.local.get(["timeoutMin", "exclusions"], (data) => {
   timeoutEl.value = data.timeoutMin || 5;
   renderExclusionList(data.exclusions || []);
-});
-
-enabledEl.addEventListener("change", () => {
-  chrome.storage.local.set({ enabled: enabledEl.checked });
 });
 
 timeoutEl.addEventListener("change", () => {
@@ -80,7 +172,8 @@ function addHost() {
   host = host.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
   chrome.storage.local.get(["exclusions"], (data) => {
     const exclusions = data.exclusions || [];
-    if (exclusions.includes(host)) { hostInput.value = ""; return; }
+    // Already listed (with or without the "exact:" prefix)?
+    if (exclusions.includes(host) || exclusions.includes("exact:" + host)) { hostInput.value = ""; return; }
     exclusions.push(host);
     chrome.storage.local.set({ exclusions }, () => {
       hostInput.value = "";
@@ -105,8 +198,38 @@ function renderExclusionList(exclusions) {
     return;
   }
   listEl.innerHTML = exclusions
-    .map((h) => `<div class="item"><span>${esc(h)}</span><button data-host="${escA(h)}">&times;</button></div>`)
+    .map((h) => {
+      const isExact = h.startsWith("exact:");
+      const displayHost = isExact ? h.substring(6) : h;
+      return `<div class="item" data-host="${escA(h)}">
+        <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;" title="${escA(displayHost)}">${esc(displayHost)}</span>
+        <label style="font-size: 10px; color: #888; display: flex; align-items: center; gap: 4px; margin-right: 8px; cursor: pointer; user-select: none;">
+          <input type="checkbox" class="subdomain-toggle" ${isExact ? "" : "checked"} style="width: 12px; height: 12px; accent-color: #e94560; margin: 0; cursor: pointer;">
+          subdomains
+        </label>
+        <button data-host="${escA(h)}" style="background: none; border: none; color: #e94560; font-size: 16px; cursor: pointer; padding: 0 4px; line-height: 1;">&times;</button>
+      </div>`;
+    })
     .join("");
+
+  listEl.querySelectorAll(".subdomain-toggle").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const item = cb.closest(".item");
+      const oldHost = item.dataset.host;
+      const isChecked = cb.checked;
+      const rawHost = oldHost.startsWith("exact:") ? oldHost.substring(6) : oldHost;
+      const newHost = isChecked ? rawHost : "exact:" + rawHost;
+
+      chrome.storage.local.get(["exclusions"], (data) => {
+        let list = data.exclusions || [];
+        list = list.map((ex) => (ex === oldHost ? newHost : ex));
+        chrome.storage.local.set({ exclusions: list }, () => {
+          renderExclusionList(list);
+        });
+      });
+    });
+  });
+
   listEl.querySelectorAll("button[data-host]").forEach((btn) => {
     btn.addEventListener("click", () => removeHost(btn.dataset.host));
   });
@@ -172,6 +295,41 @@ let currentUrl = "";
 let currentDomain = "";
 let allCookies = [];
 
+function getCookieFilterQuery() {
+  const filterInput = document.getElementById("cookieFilter");
+  return filterInput ? filterInput.value.trim().toLowerCase() : "";
+}
+
+function filterAndRenderCookies() {
+  const filterInput = document.getElementById("cookieFilter");
+  const query = getCookieFilterQuery();
+
+  const btnClearCookieFilter = document.getElementById("btnClearCookieFilter");
+  if (btnClearCookieFilter) {
+    btnClearCookieFilter.style.display = filterInput && filterInput.value ? "block" : "none";
+  }
+
+  const filtered = query
+    ? allCookies.filter((c) => c.name.toLowerCase().includes(query))
+    : allCookies;
+
+  cookieCountEl.textContent = filtered.length;
+
+  const btnDeleteAll = document.getElementById("btnDeleteAll");
+  const btnDeleteFiltered = document.getElementById("btnDeleteFiltered");
+  if (btnDeleteAll && btnDeleteFiltered) {
+    if (query) {
+      btnDeleteAll.style.display = "none";
+      btnDeleteFiltered.style.display = "";
+    } else {
+      btnDeleteAll.style.display = "";
+      btnDeleteFiltered.style.display = "none";
+    }
+  }
+
+  renderCookies(filtered);
+}
+
 async function loadCookies() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.url) {
@@ -181,26 +339,39 @@ async function loadCookies() {
     return;
   }
   currentUrl = tab.url;
+
+  let tabDomain = "";
   try {
-    currentDomain = new URL(tab.url).hostname;
+    tabDomain = new URL(tab.url).hostname;
   } catch {
-    currentDomain = "";
+    tabDomain = "";
   }
+
+  // Clear filter input if domain has changed
+  if (tabDomain !== currentDomain) {
+    const filterInput = document.getElementById("cookieFilter");
+    if (filterInput) filterInput.value = "";
+  }
+  currentDomain = tabDomain;
   cookieDomainEl.textContent = currentDomain;
 
   const cookies = await chrome.cookies.getAll({ url: tab.url });
   cookies.sort((a, b) => a.name.localeCompare(b.name));
   allCookies = cookies;
-  cookieCountEl.textContent = cookies.length;
-  renderCookies(cookies);
+
+  filterAndRenderCookies();
 }
 
 function renderCookies(cookies) {
   if (!cookies.length) {
-    cookieListEl.innerHTML = '<div class="empty">No cookies for this site</div>';
+    cookieListEl.innerHTML = allCookies.length
+      ? '<div class="empty">No cookies match the filter</div>'
+      : '<div class="empty">No cookies for this site</div>';
     return;
   }
-  cookieListEl.innerHTML = cookies.map((c, i) => `
+  // Each row carries its index in allCookies (not in the filtered list), so
+  // Delete / Save always act on the cookie shown in that row
+  cookieListEl.innerHTML = cookies.map((c) => ({ c, i: allCookies.indexOf(c) })).map(({ c, i }) => `
     <div class="cookie-item" data-idx="${i}">
       <div class="cookie-row">
         <span class="cookie-chevron">&#9660;</span>
@@ -325,6 +496,42 @@ document.getElementById("btnDeleteAll").addEventListener("click", async () => {
   }
   loadCookies();
 });
+
+// Delete Filtered
+const btnDeleteFiltered = document.getElementById("btnDeleteFiltered");
+if (btnDeleteFiltered) {
+  btnDeleteFiltered.addEventListener("click", async () => {
+    const filterInput = document.getElementById("cookieFilter");
+    const query = getCookieFilterQuery();
+    if (!query) return;
+
+    const filtered = allCookies.filter((c) => c.name.toLowerCase().includes(query));
+    if (!filtered.length) return;
+
+    for (const c of filtered) {
+      const protocol = c.secure ? "https" : "http";
+      const url = `${protocol}://${c.domain.replace(/^\./, "")}${c.path}`;
+      await chrome.cookies.remove({ url, name: c.name });
+    }
+
+    if (filterInput) filterInput.value = "";
+    loadCookies();
+  });
+}
+
+// Filter Cookies on input
+const cookieFilterInput = document.getElementById("cookieFilter");
+const btnClearCookieFilter = document.getElementById("btnClearCookieFilter");
+if (cookieFilterInput) {
+  cookieFilterInput.addEventListener("input", filterAndRenderCookies);
+}
+if (btnClearCookieFilter && cookieFilterInput) {
+  btnClearCookieFilter.addEventListener("click", () => {
+    cookieFilterInput.value = "";
+    filterAndRenderCookies();
+    cookieFilterInput.focus();
+  });
+}
 
 // Refresh
 document.getElementById("btnRefresh").addEventListener("click", () => loadCookies());
@@ -461,8 +668,6 @@ document.getElementById("btnRedirectCopy").addEventListener("click", async () =>
 // ═══════════════════════════════════
 //  Dark Mode
 // ═══════════════════════════════════
-const darkToggle = document.getElementById("darkToggle");
-const darkStatus = document.getElementById("darkStatus");
 const darkHostEl = document.getElementById("darkHost");
 const darkBrightness = document.getElementById("darkBrightness");
 const darkBrightnessVal = document.getElementById("darkBrightnessVal");
@@ -471,6 +676,29 @@ const scopeGlobal = document.getElementById("scopeGlobal");
 
 let darkHost = "";
 let darkScope = "site"; // "site" or "global"
+
+// Stored values: true/"on", false/"off", "system" (old booleans still work)
+function normalizeDarkMode(raw) {
+  if (raw === true || raw === "on") return "on";
+  if (raw === "system") return "system";
+  return "off";
+}
+
+function showDarkMode(mode) {
+  const container = document.getElementById("darkPillSelector");
+  if (!container) return;
+  const btns = Array.from(container.querySelectorAll(".pill-btn"));
+  const activeBtn = container.querySelector(`.pill-btn[data-mode="${mode}"]`);
+  const glider = container.querySelector(".pill-glider");
+  btns.forEach(b => b.classList.remove("active"));
+  if (activeBtn) {
+    activeBtn.classList.add("active");
+    const idx = btns.indexOf(activeBtn);
+    if (glider) {
+      glider.style.transform = `translateX(${idx * 100}%)`;
+    }
+  }
+}
 
 async function loadDarkMode() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -486,27 +714,26 @@ async function loadDarkMode() {
   darkBrightness.value = brightness;
   darkBrightnessVal.textContent = brightness + "%";
 
+  // "All sites" shows the global setting; "This site only" shows what applies here
   const siteState = data[siteKey];
-  const globalState = data.darkmode_global || false;
-  const enabled = siteState !== undefined ? siteState : globalState;
-
-  darkToggle.checked = enabled;
-  updateDarkStatus(enabled);
+  const globalState = data.darkmode_global;
+  const rawMode = darkScope === "global" ? globalState : (siteState !== undefined ? siteState : globalState);
+  showDarkMode(normalizeDarkMode(rawMode));
 }
 
-function updateDarkStatus(on) {
-  darkStatus.textContent = on ? "ON" : "OFF";
-  darkStatus.className = "status " + (on ? "on" : "off");
+async function notifyDarkModeTab() {
+  // The content script re-reads storage and re-checks the page
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab) {
+    chrome.tabs.sendMessage(tab.id, { type: "darkmode_toggle" }).catch(() => {});
+  }
 }
 
-async function applyDark() {
-  const enabled = darkToggle.checked;
-  const brightness = parseInt(darkBrightness.value);
-  updateDarkStatus(enabled);
+async function setDarkMode(mode) {
+  showDarkMode(mode);
 
-  // Save preference
   if (darkScope === "global") {
-    await chrome.storage.local.set({ darkmode_global: enabled });
+    await chrome.storage.local.set({ darkmode_global: mode });
     // "All sites" is a master switch: clear any per-site overrides so that
     // toggling it (esp. OFF) truly applies everywhere. Otherwise a leftover
     // per-site value keeps winning over global and the site stays dark.
@@ -520,44 +747,46 @@ async function applyDark() {
     if (overrides.length) await chrome.storage.local.remove(overrides);
   } else {
     const siteKey = "darkmode_" + darkHost;
-    await chrome.storage.local.set({ [siteKey]: enabled });
+    await chrome.storage.local.set({ [siteKey]: mode });
   }
-  await chrome.storage.local.set({ darkmode_brightness: brightness });
 
-  // Send to active tab's content script
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
-    chrome.tabs.sendMessage(tab.id, {
-      type: "darkmode_toggle",
-      enabled,
-      brightness,
-    }).catch(() => {});
-  }
+  await notifyDarkModeTab();
 }
 
-darkToggle.addEventListener("change", applyDark);
+const darkPillSelector = document.getElementById("darkPillSelector");
+if (darkPillSelector) {
+  darkPillSelector.querySelectorAll(".pill-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      setDarkMode(btn.dataset.mode);
+    });
+  });
+}
 
 darkBrightness.addEventListener("input", () => {
   darkBrightnessVal.textContent = darkBrightness.value + "%";
 });
-darkBrightness.addEventListener("change", applyDark);
+darkBrightness.addEventListener("change", async () => {
+  const brightness = parseInt(darkBrightness.value);
+  await chrome.storage.local.set({ darkmode_brightness: brightness });
+  await notifyDarkModeTab();
+});
 
 scopeSite.addEventListener("click", () => {
   darkScope = "site";
   scopeSite.classList.add("active");
   scopeGlobal.classList.remove("active");
+  loadDarkMode();
 });
 scopeGlobal.addEventListener("click", () => {
   darkScope = "global";
   scopeGlobal.classList.add("active");
   scopeSite.classList.remove("active");
+  loadDarkMode();
 });
 
 // ═══════════════════════════════════
 //  X Dim Mode
 // ═══════════════════════════════════
-const xdimToggle = document.getElementById("xdimToggle");
-const xdimStatus = document.getElementById("xdimStatus");
 const xdimPreview = document.getElementById("xdimPreview");
 const xdimHueSlider = document.getElementById("xdimHueSlider");
 const xdimHueVal = document.getElementById("xdimHueVal");
@@ -577,23 +806,15 @@ let xdimTheme = "dim";
 let xdimCustomHue = 210;
 
 async function loadXDim() {
-  const data = await chrome.storage.local.get(["xdim_enabled", "xdim_theme", "xdim_customHue"]);
-  const enabled = data.xdim_enabled || false;
+  const data = await chrome.storage.local.get(["xdim_theme", "xdim_customHue"]);
   xdimTheme = data.xdim_theme || "dim";
   xdimCustomHue = data.xdim_customHue || 210;
 
-  xdimToggle.checked = enabled;
   xdimHueSlider.value = xdimCustomHue;
   xdimHueVal.textContent = xdimCustomHue + "°";
 
-  updateXDimStatus(enabled);
   updateXDimThemeDots();
   updateXDimPreview();
-}
-
-function updateXDimStatus(on) {
-  xdimStatus.textContent = on ? "ON" : "OFF";
-  xdimStatus.className = "status " + (on ? "on" : "off");
 }
 
 function updateXDimThemeDots() {
@@ -620,17 +841,6 @@ function updateXDimPreview() {
   tweet.style.borderColor = `hsl(${h}, ${bSat}%, 26%)`;
 }
 
-xdimToggle.addEventListener("change", async () => {
-  const enabled = xdimToggle.checked;
-  updateXDimStatus(enabled);
-  await chrome.storage.local.set({ xdim_enabled: enabled });
-
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
-    chrome.tabs.sendMessage(tab.id, { type: "xdim_toggle", enabled }).catch(() => {});
-  }
-});
-
 xdimDots.forEach((dot) => {
   dot.addEventListener("click", async () => {
     xdimTheme = dot.dataset.theme;
@@ -653,31 +863,113 @@ xdimHueSlider.addEventListener("change", async () => {
 // ═══════════════════════════════════
 //  Cookie Consent (GDPR) Dismisser
 // ═══════════════════════════════════
-const nocookieToggle = document.getElementById("nocookieToggle");
-const nocookieStatus = document.getElementById("nocookieStatus");
+let nocookieHost = "";
 
 async function loadNoCookie() {
-  const data = await chrome.storage.local.get(["nocookie_enabled"]);
-  const enabled = data.nocookie_enabled !== false;
-  nocookieToggle.checked = enabled;
-  updateNoCookieUI(enabled);
-}
-
-function updateNoCookieUI(on) {
-  nocookieStatus.textContent = on ? "ON" : "OFF";
-  nocookieStatus.className = "status " + (on ? "on" : "off");
-}
-
-nocookieToggle.addEventListener("change", async () => {
-  const enabled = nocookieToggle.checked;
-  updateNoCookieUI(enabled);
-  await chrome.storage.local.set({ nocookie_enabled: enabled });
-
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
-    chrome.tabs.sendMessage(tab.id, { type: "nocookie_toggle", enabled }).catch(() => {});
+  const container = document.getElementById("nocookieCurrentSite");
+  const hostLabel = document.getElementById("nocookieHost");
+  const btnExclude = document.getElementById("btnNocookieExclude");
+  const listHeader = document.getElementById("nocookieExclusionsHeader");
+  const exclListEl = document.getElementById("nocookieExclusionsList");
+
+  if (!container || !hostLabel || !btnExclude || !listHeader || !exclListEl) return;
+
+  if (tab && tab.url && (tab.url.startsWith("http://") || tab.url.startsWith("https://"))) {
+    try {
+      nocookieHost = new URL(tab.url).hostname;
+    } catch {
+      nocookieHost = "";
+    }
+  } else {
+    nocookieHost = "";
   }
-});
+
+  if (nocookieHost) {
+    container.style.display = "flex";
+    hostLabel.textContent = nocookieHost;
+  } else {
+    container.style.display = "none";
+  }
+
+  chrome.storage.local.get(["nocookie_exclusions"], (data) => {
+    const exclusions = data.nocookie_exclusions || [];
+
+    if (nocookieHost) {
+      const isExcluded = exclusions.includes(nocookieHost);
+      btnExclude.textContent = isExcluded ? "Re-enable Consent Dismissal" : "Exclude This Site";
+      if (isExcluded) {
+        btnExclude.style.borderColor = "#4caf50";
+        btnExclude.style.color = "#4caf50";
+      } else {
+        btnExclude.style.borderColor = "#e94560";
+        btnExclude.style.color = "#e94560";
+      }
+    }
+
+    if (exclusions.length > 0) {
+      listHeader.style.display = "block";
+      exclListEl.innerHTML = exclusions
+        .map((h) => `<div class="item"><span>${esc(h)}</span><button data-host="${escA(h)}">&times;</button></div>`)
+        .join("");
+
+      exclListEl.querySelectorAll("button[data-host]").forEach((btn) => {
+        btn.addEventListener("click", () => removeNocookieExclusion(btn.dataset.host));
+      });
+    } else {
+      listHeader.style.display = "none";
+      exclListEl.innerHTML = "";
+    }
+  });
+}
+
+async function toggleNocookieExclusion() {
+  if (!nocookieHost) return;
+  chrome.storage.local.get(["nocookie_exclusions"], async (data) => {
+    let exclusions = data.nocookie_exclusions || [];
+    if (exclusions.includes(nocookieHost)) {
+      exclusions = exclusions.filter((h) => h !== nocookieHost);
+    } else {
+      exclusions.push(nocookieHost);
+    }
+    await chrome.storage.local.set({ nocookie_exclusions: exclusions });
+
+    // Notify active tab content script
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab) {
+      chrome.tabs.sendMessage(tab.id, { type: "nocookie_exclusions_updated" }).catch(() => {});
+      chrome.tabs.reload(tab.id);
+    }
+
+    loadNoCookie();
+  });
+}
+
+function removeNocookieExclusion(host) {
+  chrome.storage.local.get(["nocookie_exclusions"], async (data) => {
+    const exclusions = (data.nocookie_exclusions || []).filter((h) => h !== host);
+    await chrome.storage.local.set({ nocookie_exclusions: exclusions });
+
+    // Notify active tab content script
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab) {
+      chrome.tabs.sendMessage(tab.id, { type: "nocookie_exclusions_updated" }).catch(() => {});
+      try {
+        const tabHost = new URL(tab.url).hostname;
+        if (tabHost === host) {
+          chrome.tabs.reload(tab.id);
+        }
+      } catch {}
+    }
+
+    loadNoCookie();
+  });
+}
+
+const btnNocookieExclude = document.getElementById("btnNocookieExclude");
+if (btnNocookieExclude) {
+  btnNocookieExclude.addEventListener("click", toggleNocookieExclusion);
+}
 
 // ═══════════════════════════════════
 //  Live CSS Editor
@@ -741,8 +1033,6 @@ livecssClear.addEventListener("click", async () => {
 // ═══════════════════════════════════
 //  YouTube Unhook
 // ═══════════════════════════════════
-const unhookToggle = document.getElementById("unhookToggle");
-const unhookStatus = document.getElementById("unhookStatus");
 const unhookFeatureEls = document.querySelectorAll("#unhookFeatures .unhook-feature");
 const UNHOOK_FEATURE_DEFAULTS = { homepage: true, sidebar: true, endscreen: true, shorts: true, wider: true };
 
@@ -752,19 +1042,10 @@ async function getUnhookFeatures() {
 }
 
 async function loadUnhook() {
-  const data = await chrome.storage.local.get(["unhook_enabled"]);
-  const enabled = data.unhook_enabled !== false;
-  unhookToggle.checked = enabled;
-  updateUnhookUI(enabled);
   const features = await getUnhookFeatures();
   unhookFeatureEls.forEach((el) => {
     el.classList.toggle("off", features[el.dataset.feature] === false);
   });
-}
-
-function updateUnhookUI(on) {
-  unhookStatus.textContent = on ? "ON" : "OFF";
-  unhookStatus.className = "status " + (on ? "on" : "off");
 }
 
 async function pushUnhookState() {
@@ -776,13 +1057,6 @@ async function pushUnhookState() {
     chrome.tabs.sendMessage(tab.id, { type: "unhook_toggle", enabled, features }).catch(() => {});
   }
 }
-
-unhookToggle.addEventListener("change", async () => {
-  const enabled = unhookToggle.checked;
-  updateUnhookUI(enabled);
-  await chrome.storage.local.set({ unhook_enabled: enabled });
-  await pushUnhookState();
-});
 
 unhookFeatureEls.forEach((el) => {
   el.addEventListener("click", async () => {
@@ -798,88 +1072,20 @@ unhookFeatureEls.forEach((el) => {
 // ═══════════════════════════════════
 //  X Unhook
 // ═══════════════════════════════════
-const xunhookToggle = document.getElementById("xunhookToggle");
-const xunhookStatus = document.getElementById("xunhookStatus");
-
-async function loadXUnhook() {
-  const data = await chrome.storage.local.get(["xunhook_enabled"]);
-  const enabled = data.xunhook_enabled !== false;
-  xunhookToggle.checked = enabled;
-  updateXUnhookUI(enabled);
-}
-
-function updateXUnhookUI(on) {
-  xunhookStatus.textContent = on ? "ON" : "OFF";
-  xunhookStatus.className = "status " + (on ? "on" : "off");
-}
-
-xunhookToggle.addEventListener("change", async () => {
-  const enabled = xunhookToggle.checked;
-  updateXUnhookUI(enabled);
-  await chrome.storage.local.set({ xunhook_enabled: enabled });
-
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
-    chrome.tabs.sendMessage(tab.id, { type: "xunhook_toggle", enabled }).catch(() => {});
-  }
-});
+// (On/off lives in Settings — see FEATURE_TOGGLE_EFFECTS)
+function loadXUnhook() {}
 
 // ═══════════════════════════════════
 //  Photopea No Ads
 // ═══════════════════════════════════
-const photopeaToggle = document.getElementById("photopeaToggle");
-const photopeaStatus = document.getElementById("photopeaStatus");
-
-async function loadPhotopea() {
-  const data = await chrome.storage.local.get(["photopea_enabled"]);
-  const enabled = data.photopea_enabled !== false;
-  photopeaToggle.checked = enabled;
-  updatePhotopeaUI(enabled);
-}
-
-function updatePhotopeaUI(on) {
-  photopeaStatus.textContent = on ? "ON" : "OFF";
-  photopeaStatus.className = "status " + (on ? "on" : "off");
-}
-
-photopeaToggle.addEventListener("change", async () => {
-  const enabled = photopeaToggle.checked;
-  updatePhotopeaUI(enabled);
-  await chrome.storage.local.set({ photopea_enabled: enabled });
-
-  // The width fix runs at page load, so reload any open Photopea tabs
-  const tabs = await chrome.tabs.query({ url: ["*://www.photopea.com/*", "*://photopea.com/*"] });
-  for (const tab of tabs) chrome.tabs.reload(tab.id).catch(() => {});
-});
+// (On/off lives in Settings — see FEATURE_TOGGLE_EFFECTS)
+function loadPhotopea() {}
 
 // ═══════════════════════════════════
 //  TikTok Login Skipper
 // ═══════════════════════════════════
-const tiktokToggle = document.getElementById("tiktokToggle");
-const tiktokStatus = document.getElementById("tiktokStatus");
-
-async function loadTikTok() {
-  const data = await chrome.storage.local.get(["tiktok_enabled"]);
-  const enabled = data.tiktok_enabled !== false;
-  tiktokToggle.checked = enabled;
-  updateTikTokUI(enabled);
-}
-
-function updateTikTokUI(on) {
-  tiktokStatus.textContent = on ? "ON" : "OFF";
-  tiktokStatus.className = "status " + (on ? "on" : "off");
-}
-
-tiktokToggle.addEventListener("change", async () => {
-  const enabled = tiktokToggle.checked;
-  updateTikTokUI(enabled);
-  await chrome.storage.local.set({ tiktok_enabled: enabled });
-
-  const tabs = await chrome.tabs.query({ url: ["*://www.tiktok.com/*", "*://tiktok.com/*"] });
-  for (const tab of tabs) {
-    chrome.tabs.sendMessage(tab.id, { type: "tiktok_toggle", enabled }).catch(() => {});
-  }
-});
+// (On/off lives in Settings — see FEATURE_TOGGLE_EFFECTS)
+function loadTikTok() {}
 
 // ═══════════════════════════════════
 //  No Paywall
@@ -909,29 +1115,13 @@ const ARCHIVE_DEFAULT_SITES = [
   // Nordics
   "dn.se", "svd.se", "aftenposten.no", "hs.fi", "politiken.dk", "berlingske.dk",
 ];
-const archiveToggle = document.getElementById("archiveToggle");
-const archiveStatus = document.getElementById("archiveStatus");
 const archiveSites = document.getElementById("archiveSites");
 
 async function loadArchive() {
-  const data = await chrome.storage.local.get(["archive_enabled", "archive_sites"]);
-  const enabled = data.archive_enabled !== false;
-  archiveToggle.checked = enabled;
-  updateArchiveUI(enabled);
+  const data = await chrome.storage.local.get(["archive_sites"]);
   const sites = Array.isArray(data.archive_sites) ? data.archive_sites : ARCHIVE_DEFAULT_SITES;
   archiveSites.value = sites.join("\n");
 }
-
-function updateArchiveUI(on) {
-  archiveStatus.textContent = on ? "ON" : "OFF";
-  archiveStatus.className = "status " + (on ? "on" : "off");
-}
-
-archiveToggle.addEventListener("change", () => {
-  const enabled = archiveToggle.checked;
-  updateArchiveUI(enabled);
-  chrome.storage.local.set({ archive_enabled: enabled });
-});
 
 let archiveSaveTimer;
 archiveSites.addEventListener("input", () => {
@@ -947,60 +1137,14 @@ archiveSites.addEventListener("input", () => {
 // ═══════════════════════════════════
 //  X Reply Auto-Select
 // ═══════════════════════════════════
-const xreplyToggle = document.getElementById("xreplyToggle");
-const xreplyStatus = document.getElementById("xreplyStatus");
-
-async function loadXReply() {
-  const data = await chrome.storage.local.get(["xreply_enabled"]);
-  const enabled = data.xreply_enabled !== false;
-  xreplyToggle.checked = enabled;
-  updateXReplyUI(enabled);
-}
-
-function updateXReplyUI(on) {
-  xreplyStatus.textContent = on ? "ON" : "OFF";
-  xreplyStatus.className = "status " + (on ? "on" : "off");
-}
-
-xreplyToggle.addEventListener("change", async () => {
-  const enabled = xreplyToggle.checked;
-  updateXReplyUI(enabled);
-  await chrome.storage.local.set({ xreply_enabled: enabled });
-
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
-    chrome.tabs.sendMessage(tab.id, { type: "xreply_toggle", enabled }).catch(() => {});
-  }
-});
+// (On/off lives in Settings — see FEATURE_TOGGLE_EFFECTS)
+function loadXReply() {}
 
 // ═══════════════════════════════════
 //  X Multi-Select Replies
 // ═══════════════════════════════════
-const xselectToggle = document.getElementById("xselectToggle");
-const xselectStatus = document.getElementById("xselectStatus");
-
-async function loadXSelect() {
-  const data = await chrome.storage.local.get(["xselect_enabled"]);
-  const enabled = data.xselect_enabled !== false;
-  xselectToggle.checked = enabled;
-  updateXSelectUI(enabled);
-}
-
-function updateXSelectUI(on) {
-  xselectStatus.textContent = on ? "ON" : "OFF";
-  xselectStatus.className = "status " + (on ? "on" : "off");
-}
-
-xselectToggle.addEventListener("change", async () => {
-  const enabled = xselectToggle.checked;
-  updateXSelectUI(enabled);
-  await chrome.storage.local.set({ xselect_enabled: enabled });
-
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
-    chrome.tabs.sendMessage(tab.id, { type: "xselect_toggle", enabled }).catch(() => {});
-  }
-});
+// (On/off lives in Settings — see FEATURE_TOGGLE_EFFECTS)
+function loadXSelect() {}
 
 // ═══════════════════════════════════
 //  JavaScript Toggle
@@ -1335,31 +1479,8 @@ async function enterPiP() {
 // ═══════════════════════════════════
 //  JSON Formatter
 // ═══════════════════════════════════
-const jsonformatToggle = document.getElementById("jsonformatToggle");
-const jsonformatStatus = document.getElementById("jsonformatStatus");
-
-async function loadJsonFormat() {
-  const data = await chrome.storage.local.get(["jsonformat_enabled"]);
-  const enabled = data.jsonformat_enabled !== false;
-  jsonformatToggle.checked = enabled;
-  updateJsonFormatUI(enabled);
-}
-
-function updateJsonFormatUI(on) {
-  jsonformatStatus.textContent = on ? "ON" : "OFF";
-  jsonformatStatus.className = "status " + (on ? "on" : "off");
-}
-
-jsonformatToggle.addEventListener("change", async () => {
-  const enabled = jsonformatToggle.checked;
-  updateJsonFormatUI(enabled);
-  await chrome.storage.local.set({ jsonformat_enabled: enabled });
-
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
-    chrome.tabs.sendMessage(tab.id, { type: "jsonformat_toggle", enabled }).catch(() => {});
-  }
-});
+// (On/off lives in Settings — see FEATURE_TOGGLE_EFFECTS)
+function loadJsonFormat() {}
 
 // ═══════════════════════════════════
 //  AI Summarize
@@ -1598,3 +1719,228 @@ function esc(s) {
 function escA(s) {
   return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+
+// ═══════════════════════════════════
+//  Settings Panel Customization
+// ═══════════════════════════════════
+let showHidden = false;
+
+// Send a message to every open tab (or the tabs matching urls), ignoring
+// tabs without our content script
+async function messageTabs(msg, urls) {
+  const tabs = await chrome.tabs.query(urls ? { url: urls } : {});
+  for (const tab of tabs) {
+    chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
+  }
+}
+
+const PHOTOPEA_URLS = ["*://www.photopea.com/*", "*://photopea.com/*"];
+const TIKTOK_URLS = ["*://www.tiktok.com/*", "*://tiktok.com/*"];
+
+// What has to happen, besides saving the switch, when a feature is turned
+// on or off, so already-open pages follow the setting right away.
+// Features not listed need nothing more: the background worker reads the
+// switch itself (tab cleaner, redirects, PiP, No Paywall), the feature only
+// lives in this popup (cookies, JS toggle, music, summarize), or it applies
+// on the next page load (Google Maps links, View Image).
+const FEATURE_TOGGLE_EFFECTS = {
+  darkmode: () => messageTabs({ type: "darkmode_toggle" }),
+  xdim: (enabled) => messageTabs({ type: "xdim_toggle", enabled }),
+  xunhook: (enabled) => messageTabs({ type: "xunhook_toggle", enabled }),
+  xreply: (enabled) => messageTabs({ type: "xreply_toggle", enabled }),
+  xselect: (enabled) => messageTabs({ type: "xselect_toggle", enabled }),
+  nocookie: (enabled) => messageTabs({ type: "nocookie_toggle", enabled }),
+  livecss: (enabled) => messageTabs({ type: "livecss_feature_toggle", enabled }),
+  jsonformat: (enabled) => messageTabs({ type: "jsonformat_toggle", enabled }),
+  tiktok: (enabled) => messageTabs({ type: "tiktok_toggle", enabled }, TIKTOK_URLS),
+  unhook: async (enabled) => {
+    const features = await getUnhookFeatures();
+    await messageTabs({ type: "unhook_toggle", enabled, features });
+  },
+  // The width fix runs at page load, so reload any open Photopea tabs
+  photopea: async () => {
+    const tabs = await chrome.tabs.query({ url: PHOTOPEA_URLS });
+    for (const tab of tabs) chrome.tabs.reload(tab.id).catch(() => {});
+  },
+};
+
+// Save the on/off state of several features and apply the effects of the
+// ones that actually changed
+async function setFeaturesEnabled(updates) {
+  const features = FEATURES.filter(f => f.id in updates);
+  const before = await chrome.storage.local.get(features.map(f => f.storageKey));
+  const toSave = {};
+  features.forEach(f => { toSave[f.storageKey] = updates[f.id]; });
+  await chrome.storage.local.set(toSave);
+  for (const f of features) {
+    if (isFeatureEnabled(f, before) !== updates[f.id] && FEATURE_TOGGLE_EFFECTS[f.id]) {
+      await FEATURE_TOGGLE_EFFECTS[f.id](updates[f.id]);
+    }
+  }
+}
+
+function renderFeatureRow(f, isEnabled, isHidden, isVisible) {
+  const toggleId = `setting-toggle-${f.id}`;
+  const hiddenClass = isHidden ? "hidden-feature" : "";
+  const displayStyle = isVisible ? "" : "style=\"display: none !important;\"";
+  const hideBtnIcon = isHidden
+    ? `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
+    : `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+  const hideTitle = isHidden ? "Show feature in navigation" : "Hide feature from navigation";
+
+  const dragHandleIcon = `
+    <svg width="12" height="18" viewBox="0 0 12 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="3" cy="3" r="1" fill="currentColor"/>
+      <circle cx="3" cy="9" r="1" fill="currentColor"/>
+      <circle cx="3" cy="15" r="1" fill="currentColor"/>
+      <circle cx="9" cy="3" r="1" fill="currentColor"/>
+      <circle cx="9" cy="9" r="1" fill="currentColor"/>
+      <circle cx="9" cy="15" r="1" fill="currentColor"/>
+    </svg>
+  `;
+
+  return `
+    <div class="setting-item ${hiddenClass}" data-feature-id="${f.id}" draggable="true" ${displayStyle}>
+      <div class="setting-tooltip">${esc(f.description)}</div>
+      <div class="setting-info">
+        <div class="drag-handle" title="Drag to reorder">
+          ${dragHandleIcon}
+        </div>
+        <span class="setting-icon">${esc(f.icon)}</span>
+        <span class="setting-label">${esc(f.label)}</span>
+      </div>
+      <div class="setting-actions">
+        <button class="btn-hide ${isHidden ? 'is-hidden' : ''}" data-id="${f.id}" title="${hideTitle}">
+          ${hideBtnIcon}
+        </button>
+        <label class="switch">
+          <input type="checkbox" id="${toggleId}" ${isEnabled ? "checked" : ""}>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+  `;
+}
+
+function initDragAndDrop() {
+  const container = document.getElementById("settingsList");
+  if (!container || container.dataset.dndReady) return;
+  // Listeners live on the container, which is reused across re-renders,
+  // so attach them only once
+  container.dataset.dndReady = "1";
+
+  let dragEl = null;
+
+  container.addEventListener("dragstart", (e) => {
+    const item = e.target.closest(".setting-item");
+    if (!item) return;
+    dragEl = item;
+    item.classList.add("dragging");
+    container.classList.add("reordering");
+    e.dataTransfer.effectAllowed = "move";
+  });
+
+  container.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    if (!dragEl) return;
+    const target = e.target.closest(".setting-item");
+    if (!target || target === dragEl) return;
+
+    const rect = target.getBoundingClientRect();
+    const next = (e.clientY - rect.top) / (rect.bottom - rect.top) > 0.5;
+    container.insertBefore(dragEl, next ? target.nextSibling : target);
+  });
+
+  container.addEventListener("dragend", () => {
+    if (!dragEl) return;
+    dragEl.classList.remove("dragging");
+    dragEl = null;
+    container.classList.remove("reordering");
+    saveNewOrder();
+  });
+}
+
+function saveNewOrder() {
+  const items = Array.from(document.querySelectorAll("#settingsList .setting-item"));
+  const newOrder = items.map(item => item.dataset.featureId);
+
+  chrome.storage.local.set({ feature_order: newOrder }, () => {
+    updateNav();
+  });
+}
+
+function loadSettings() {
+  const keys = FEATURES.map(f => f.storageKey).concat(["hidden_features", "feature_order"]);
+  chrome.storage.local.get(keys, (data) => {
+    const hiddenFeatures = data.hidden_features || [];
+    const order = data.feature_order || FEATURES.map(f => f.id);
+    const container = document.getElementById("settingsList");
+    if (!container) return;
+
+    const enabledCount = FEATURES.filter(f => isFeatureEnabled(f, data)).length;
+
+    const headerTitle = document.querySelector("#page-settings .settings-header h2");
+    if (headerTitle) {
+      headerTitle.textContent = `${enabledCount} of ${FEATURES.length} features active`;
+    }
+
+    let html = "";
+    sortFeatures(order).forEach(f => {
+      const isHidden = hiddenFeatures.includes(f.id);
+      const isVisible = !isHidden || showHidden;
+      html += renderFeatureRow(f, isFeatureEnabled(f, data), isHidden, isVisible);
+    });
+
+    container.innerHTML = html || `<div class="empty">No features to display</div>`;
+    initDragAndDrop();
+
+    container.querySelectorAll(".switch input").forEach(input => {
+      input.addEventListener("change", async () => {
+        const featureId = input.closest(".setting-item").dataset.featureId;
+        await setFeaturesEnabled({ [featureId]: input.checked });
+        loadSettings();
+        updateNav();
+      });
+    });
+
+    container.querySelectorAll(".btn-hide").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const featureId = btn.dataset.id;
+        chrome.storage.local.get(["hidden_features"], (res) => {
+          let list = res.hidden_features || [];
+          if (list.includes(featureId)) {
+            list = list.filter(id => id !== featureId);
+          } else {
+            list.push(featureId);
+          }
+          chrome.storage.local.set({ hidden_features: list }, () => {
+            loadSettings();
+            updateNav();
+          });
+        });
+      });
+    });
+  });
+}
+
+async function setAllFeatures(enabled) {
+  const updates = {};
+  FEATURES.forEach(f => { updates[f.id] = enabled; });
+  await setFeaturesEnabled(updates);
+  loadSettings();
+  updateNav();
+}
+
+document.getElementById("btnSelectAll").addEventListener("click", () => setAllFeatures(true));
+document.getElementById("btnUnselectAll").addEventListener("click", () => setAllFeatures(false));
+
+document.getElementById("btnToggleShowHidden").addEventListener("click", () => {
+  showHidden = !showHidden;
+  const btn = document.getElementById("btnToggleShowHidden");
+  btn.classList.toggle("active", showHidden);
+  loadSettings();
+});
+
+// Initial layout & descriptions load (restores the last open tab)
+loadTabDescriptions();
+updateNav(true);
