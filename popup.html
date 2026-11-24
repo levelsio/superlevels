@@ -1042,6 +1042,17 @@
         <div class="unhook-feature"><span class="check">✓</span> Shift-click to select a whole range</div>
         <div class="unhook-feature"><span class="check">✓</span> Hide, Block, or Hide + Block all selected at once</div>
         <div class="unhook-feature"><span class="check">✓</span> Skips the post itself and your own replies</div>
+        <div class="unhook-feature"><span class="check">✓</span> Scan AI: xAI pre-ticks replies that look AI-written</div>
+        <div class="unhook-feature"><span class="check">✓</span> "AI score" in the sort menu ranks replies, most AI first</div>
+      </div>
+
+      <div class="dark-section" style="margin-top:10px">
+        <label>xAI API key <span style="color:#555;">(xai-..., for Scan AI)</span></label>
+        <input type="password" id="xselectKey" placeholder="paste your key" style="width:100%;padding:6px 8px;background:#0f1e3d;border:1px solid #2a2a4a;border-radius:4px;color:#ddd;font-size:12px;margin-bottom:6px;">
+        <label>Model</label>
+        <input type="text" id="xselectModel" placeholder="grok-4.20-0309-non-reasoning" style="width:100%;padding:6px 8px;background:#0f1e3d;border:1px solid #2a2a4a;border-radius:4px;color:#ddd;font-size:12px;margin-bottom:6px;">
+        <button class="btn-save" id="xselectSaveBtn" style="margin-top:4px;padding:6px 14px;font-size:12px;">Save</button>
+        <div style="font-size:11px;color:#555;margin-top:8px;">Stored locally, shared with ✨ Summarize. Reply text is sent only to xAI, only when you click Scan AI.</div>
       </div>
 
       <div class="xdim-note" style="margin-top:10px">

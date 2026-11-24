@@ -984,7 +984,23 @@ async function loadXSelect() {
   const enabled = data.xselect_enabled !== false;
   xselectToggle.checked = enabled;
   updateXSelectUI(enabled);
+  const ai = await chrome.storage.local.get(["ai_key_xai", "xselect_model"]);
+  xselectKey.value = ai.ai_key_xai || "";
+  xselectModel.value = ai.xselect_model || "";
 }
+
+const xselectKey = document.getElementById("xselectKey");
+const xselectModel = document.getElementById("xselectModel");
+const xselectSaveBtn = document.getElementById("xselectSaveBtn");
+
+xselectSaveBtn.addEventListener("click", async () => {
+  await chrome.storage.local.set({
+    ai_key_xai: xselectKey.value.trim(),
+    xselect_model: xselectModel.value.trim(),
+  });
+  xselectSaveBtn.textContent = "Saved ✓";
+  setTimeout(() => { xselectSaveBtn.textContent = "Save"; }, 1500);
+});
 
 function updateXSelectUI(on) {
   xselectStatus.textContent = on ? "ON" : "OFF";
