@@ -1471,7 +1471,23 @@ const AI_PROVIDERS = {
     signup: "https://console.x.ai/",
     keyHint: "(xai-...)",
   },
+  ollama: {
+    label: "Ollama",
+    // Blank = use the first model installed on the Ollama server
+    defaultModel: "",
+    signup: "https://ollama.com/download",
+    local: true,
+  },
 };
+
+const OLLAMA_DEFAULT_URL = "http://localhost:11434";
+
+// Normalize a user-entered Ollama server address: add http:// if missing, drop trailing slashes
+function normalizeOllamaUrl(raw) {
+  let url = (raw || "").trim() || OLLAMA_DEFAULT_URL;
+  if (!/^https?:\/\//i.test(url)) url = `http://${url}`;
+  return url.replace(/\/+$/, "");
+}
 
 const LENGTH_PROMPTS = {
   brief: "Summarize it in 3-4 clear sentences.",
@@ -1486,6 +1502,9 @@ const aiModelEl = document.getElementById("aiModel");
 const aiResultEl = document.getElementById("aiResult");
 const aiConfigEl = document.getElementById("aiConfig");
 const summarizeBtn = document.getElementById("summarizeBtn");
+const aiUrlEl = document.getElementById("aiUrl");
+const aiKeyRowEl = document.getElementById("aiKeyRow");
+const aiUrlRowEl = document.getElementById("aiUrlRow");
 
 function loadSummarize() {
   chrome.storage.local.get(["ai_provider", "ai_length"], (data) => {
@@ -1500,15 +1519,25 @@ function refreshAiProviderFields() {
   const provider = aiProviderEl.value;
   const cfg = AI_PROVIDERS[provider];
   chrome.storage.local.get(
-    [`ai_key_${provider}`, `ai_model_${provider}`],
+    [`ai_key_${provider}`, `ai_model_${provider}`, "ai_url_ollama"],
     (data) => {
       const key = data[`ai_key_${provider}`] || "";
       aiKeyEl.value = key;
       aiModelEl.value = data[`ai_model_${provider}`] || cfg.defaultModel;
-      document.getElementById("aiSignupLink").href = cfg.signup;
-      document.getElementById("aiKeyHint").textContent = cfg.keyHint;
-      // Auto-open config if no key saved for this provider yet
-      aiConfigEl.style.display = key ? "none" : "block";
+      aiUrlEl.value = data.ai_url_ollama || OLLAMA_DEFAULT_URL;
+      const signup = document.getElementById("aiSignupLink");
+      signup.href = cfg.signup;
+      signup.textContent = cfg.local ? "Get Ollama →" : "Get an API key →";
+      document.getElementById("aiKeyHint").textContent = cfg.keyHint || "";
+      document.getElementById("aiSettingsBtn").textContent = cfg.local ? "⚙️ Server & model" : "⚙️ API key & model";
+      document.getElementById("aiModel").placeholder = cfg.local ? "blank = first installed model" : "model name";
+      aiKeyRowEl.style.display = cfg.local ? "none" : "block";
+      aiUrlRowEl.style.display = cfg.local ? "block" : "none";
+      document.getElementById("aiPrivacyNote").textContent = cfg.local
+        ? "Settings are stored locally in your browser. Page text is sent only to your Ollama server."
+        : "Keys are stored locally in your browser and sent only to the provider you pick.";
+      // Auto-open config if no key saved for this provider yet (Ollama needs no key)
+      aiConfigEl.style.display = key || cfg.local ? "none" : "block";
     }
   );
 }
@@ -1529,15 +1558,14 @@ document.getElementById("aiSettingsBtn").addEventListener("click", () => {
 document.getElementById("aiSaveBtn").addEventListener("click", () => {
   const provider = aiProviderEl.value;
   const cfg = AI_PROVIDERS[provider];
-  chrome.storage.local.set(
-    {
-      [`ai_key_${provider}`]: aiKeyEl.value.trim(),
-      [`ai_model_${provider}`]: aiModelEl.value.trim() || cfg.defaultModel,
-    },
-    () => {
-      aiConfigEl.style.display = "none";
-    }
-  );
+  const values = cfg.local
+    ? { ai_url_ollama: normalizeOllamaUrl(aiUrlEl.value) }
+    : { [`ai_key_${provider}`]: aiKeyEl.value.trim() };
+  values[`ai_model_${provider}`] = aiModelEl.value.trim() || cfg.defaultModel;
+  if (cfg.local) aiUrlEl.value = values.ai_url_ollama;
+  chrome.storage.local.set(values, () => {
+    aiConfigEl.style.display = "none";
+  });
 });
 
 function showAiResult(html, cls) {
@@ -1555,7 +1583,8 @@ function extractPageText() {
 summarizeBtn.addEventListener("click", async () => {
   const provider = aiProviderEl.value;
   const cfg = AI_PROVIDERS[provider];
-  const key = aiKeyEl.value.trim();
+  // For Ollama the "key" slot carries the server URL
+  const key = cfg.local ? normalizeOllamaUrl(aiUrlEl.value) : aiKeyEl.value.trim();
   const model = aiModelEl.value.trim() || cfg.defaultModel;
 
   if (!key) {
@@ -1586,7 +1615,19 @@ summarizeBtn.addEventListener("click", async () => {
       `Summarize this web page. ${LENGTH_PROMPTS[aiLengthEl.value]}\n\n` +
       `Title: ${page.title}\nURL: ${page.url}\n\n${page.text}`;
 
-    const summary = await callAiProvider(provider, model, key, system, user);
+    // Show the summary as it is written (redrawn at most once per frame)
+    let pending = null;
+    const onDelta = (soFar) => {
+      if (pending === null) {
+        requestAnimationFrame(() => {
+          if (pending !== null) renderSummary(pending, true);
+          pending = null;
+        });
+      }
+      pending = soFar;
+    };
+    const summary = await callAiProvider(provider, model, key, system, user, onDelta);
+    pending = null;
     renderSummary(summary);
     chrome.storage.local.set({ ai_length: aiLengthEl.value });
   } catch (err) {
@@ -1596,8 +1637,133 @@ summarizeBtn.addEventListener("click", async () => {
   }
 });
 
-// Dispatch to the right provider API. Returns the summary text.
-async function callAiProvider(provider, model, key, system, user) {
+// Talk to an Ollama server (local or on your network). `baseUrl` is the server address.
+async function callOllama(baseUrl, model, system, user, onDelta) {
+  const base = normalizeOllamaUrl(baseUrl);
+  const corsHelp =
+    "Ollama blocked the request from this extension. Allow it by setting " +
+    "OLLAMA_ORIGINS=chrome-extension://* on the Ollama server, then restart Ollama.";
+  const connectHelp = `Ollama: can't reach ${base}. Is Ollama running?`;
+
+  const req = async (path, init) => {
+    let res;
+    try {
+      res = await fetch(`${base}${path}`, init);
+    } catch {
+      throw new Error(connectHelp);
+    }
+    if (res.status === 403) throw new Error(corsHelp);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(`Ollama: ${data?.error || `HTTP ${res.status}`}`);
+    return data;
+  };
+
+  const post = (path, payload) =>
+    req(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  // Models currently in memory, with the context size each was loaded with
+  const loadedModels = async () => (await req("/api/ps").catch(() => ({}))).models || [];
+
+  // No model chosen: use the first model that can chat (skip embedding-only models), trying
+  // models already in memory first so nothing new has to load. Older Ollama versions don't
+  // report capabilities, so a missing list counts as chat-capable.
+  if (!model) {
+    const names = (await loadedModels()).map((m) => m.name);
+    for (const m of (await req("/api/tags")).models || []) {
+      if (!names.includes(m.name)) names.push(m.name);
+    }
+    for (const name of names) {
+      const info = await post("/api/show", { model: name }).catch(() => ({}));
+      if (!info.capabilities || info.capabilities.includes("completion")) {
+        model = name;
+        break;
+      }
+    }
+    if (!model) throw new Error("Ollama: no chat models installed. Run `ollama pull <model>` first.");
+  }
+
+  // Pick the context size. Ollama reloads a model whenever a request asks for a different
+  // num_ctx than the one it is loaded with, which would evict a copy other apps rely on and
+  // ignore a server-wide OLLAMA_CONTEXT_LENGTH. So reuse the size the model is loaded with;
+  // if it isn't loaded, load it with the server's defaults first and read that size back.
+  // Ask for more only when that is below MIN_CTX: the page text (~20k chars) wouldn't fit
+  // and Ollama would silently cut off the start of the prompt, instructions included.
+  const MIN_CTX = 8192;
+  const loadedCtx = async () => {
+    const m = (await loadedModels()).find((x) => x.name === model || x.name === `${model}:latest`);
+    return m?.context_length || 0;
+  };
+  let ctx = await loadedCtx();
+  if (!ctx) {
+    await post("/api/generate", { model }); // no prompt = just load the model
+    ctx = await loadedCtx();
+  }
+
+  const chat = {
+    model,
+    stream: !!onDelta,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    options: { num_ctx: Math.max(ctx, MIN_CTX) },
+  };
+
+  let text = "";
+  if (!onDelta) {
+    text = (await post("/api/chat", chat)).message?.content || "";
+  } else {
+    // Streaming: Ollama sends one JSON object per line as the model writes
+    let res;
+    try {
+      res = await fetch(`${base}/api/chat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(chat),
+      });
+    } catch {
+      throw new Error(connectHelp);
+    }
+    if (res.status === 403) throw new Error(corsHelp);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(`Ollama: ${data?.error || `HTTP ${res.status}`}`);
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffered = "";
+    const handle = (line) => {
+      if (!line.trim()) return;
+      const msg = JSON.parse(line);
+      if (msg.error) throw new Error(`Ollama: ${msg.error}`);
+      const piece = msg.message?.content || "";
+      if (piece) {
+        text += piece;
+        onDelta(text);
+      }
+    };
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffered += decoder.decode(value, { stream: true });
+      const lines = buffered.split("\n");
+      buffered = lines.pop();
+      lines.forEach(handle);
+    }
+    handle(buffered + decoder.decode());
+  }
+  if (!text.trim()) throw new Error("Empty response from provider.");
+  return text.trim();
+}
+
+// Dispatch to the right provider API. Returns the summary text. `onDelta(textSoFar)` is
+// called as text arrives for providers that stream (currently Ollama).
+async function callAiProvider(provider, model, key, system, user, onDelta) {
+  if (provider === "ollama") return callOllama(key, model, system, user, onDelta);
+
   let url, headers, body, pick;
 
   if (provider === "anthropic") {
@@ -1644,8 +1810,9 @@ async function callAiProvider(provider, model, key, system, user) {
   return text.trim();
 }
 
-// Minimal safe markdown: escape, then **bold**, and '- ' bullet lists
-function renderSummary(text) {
+// Minimal safe markdown: escape, then **bold**, and '- ' bullet lists.
+// While `streaming`, the text is still arriving: no Copy button yet, and a cursor at the end.
+function renderSummary(text, streaming) {
   const lines = text.split("\n");
   let html = "";
   let inList = false;
@@ -1661,6 +1828,10 @@ function renderSummary(text) {
     }
   }
   if (inList) html += "</ul>";
+  if (streaming) {
+    showAiResult(`${html}<span class="ai-cursor">▍</span>`);
+    return;
+  }
   showAiResult(`<button class="ai-copy" id="aiCopyBtn">Copy</button>${html}`);
   document.getElementById("aiCopyBtn").addEventListener("click", () => {
     navigator.clipboard.writeText(text).then(() => {
