@@ -42,6 +42,9 @@ Instant dark mode for any website using CSS filter inversion. Adjustable brightn
 ### 𝕏 X Dim Mode
 Custom dim theme for X/Twitter with 7 color palettes: Dim, Slate, Jade, Plum, Dusk, Ember, or a custom hue. Live preview in the popup.
 
+### 🤖 X Bot Blocker
+Auto-blocks AI reply bots from [blockedforaireply.com](https://blockedforaireply.com), but only the ones you actually come across on X. A page-world hook reads the users in X's own API responses (timeline, replies, search, profiles) and any account on the list is blocked through X's block endpoint with your logged-in session, one every ~1.5s (pauses 15 min if X rate-limits). Never blocks you, accounts you follow, or accounts you already block. Accounts removed from the list after an appeal are unblocked, but only if SuperLevels blocked them. The list (`ids.txt` + `removed-ids.txt`) is fetched by the background worker at most once every 6 hours. Off by default; turn it on in the popup.
+
 ### ⚡ JS Toggle
 Disable JavaScript per-site with one click. Useful for debugging, reading articles without popups, or testing progressive enhancement. Page reloads automatically.
 

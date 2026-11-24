@@ -469,3 +469,108 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   const clean = url.origin + url.pathname;
   chrome.tabs.update(details.tabId, { url: "https://archive.is/" + clean }).catch(() => {});
 });
+
+// ═══════════════════════════════════
+//  X Bot Blocker — blockedforaireply.com list + page hook registration
+//  The list is fetched at most once every 6 hours (only while the feature is
+//  on). xbots.js on x.com does the actual blocking/unblocking and reports
+//  back here so the record of what SuperLevels blocked has a single writer.
+// ═══════════════════════════════════
+const XBOTS_SCRIPT_ID = "sl-xbots-main";
+const XBOTS_MATCHES = ["*://x.com/*", "*://twitter.com/*", "*://mobile.x.com/*", "*://mobile.twitter.com/*"];
+const XBOTS_IDS_URL = "https://blockedforaireply.com/api/ids.txt";
+const XBOTS_REMOVED_URL = "https://blockedforaireply.com/api/removed-ids.txt";
+const XBOTS_REFRESH_MS = 6 * 60 * 60e3;
+const XBOTS_RETRY_MS = 30 * 60e3;   // after a failed fetch
+
+let xbotsChain = Promise.resolve();
+const xbotsSerial = (fn) => (xbotsChain = xbotsChain.then(fn).catch(() => {}));
+
+async function xbotsFetchIds(url, etag) {
+  const res = await fetch(url, { headers: etag ? { "If-None-Match": etag } : {}, cache: "no-cache" });
+  if (res.status === 304) return { ids: null, etag };
+  if (!res.ok) throw new Error(`${url.split("/").pop()}: HTTP ${res.status}`);
+  const ids = (await res.text()).split(/\r?\n/).map((l) => l.trim()).filter((l) => /^\d{1,25}$/.test(l));
+  return { ids, etag: res.headers.get("etag") || "" };
+}
+
+async function xbotsRefresh(force = false) {
+  const d = await chrome.storage.local.get([
+    "xbots_enabled", "xbots_checked_at", "xbots_error", "xbots_etag_ids", "xbots_etag_removed", "xbots_ids",
+  ]);
+  if (d.xbots_enabled !== true) return;
+  const wait = d.xbots_error ? XBOTS_RETRY_MS : XBOTS_REFRESH_MS;
+  if (!force && d.xbots_checked_at && Date.now() - d.xbots_checked_at < wait) return;
+  await chrome.storage.local.set({ xbots_checked_at: Date.now() });
+  try {
+    // A 304 for a list we don't have stored yet would leave us empty: drop the etag then
+    const [list, gone] = await Promise.all([
+      xbotsFetchIds(XBOTS_IDS_URL, d.xbots_ids?.length ? d.xbots_etag_ids : ""),
+      xbotsFetchIds(XBOTS_REMOVED_URL, d.xbots_etag_removed),
+    ]);
+    const update = { xbots_error: "", xbots_updated_at: Date.now(), xbots_etag_ids: list.etag, xbots_etag_removed: gone.etag };
+    if (list.ids) update.xbots_ids = list.ids;
+    if (gone.ids) update.xbots_removed = gone.ids;
+    await chrome.storage.local.set(update);
+  } catch (e) {
+    await chrome.storage.local.set({ xbots_error: e.message || String(e) });
+  }
+}
+
+async function xbotsSyncScript() {
+  const { xbots_enabled } = await chrome.storage.local.get(["xbots_enabled"]);
+  const enabled = xbots_enabled === true;
+  const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [XBOTS_SCRIPT_ID] });
+  if (enabled && existing.length === 0) {
+    await chrome.scripting.registerContentScripts([{
+      id: XBOTS_SCRIPT_ID,
+      matches: XBOTS_MATCHES,
+      js: ["xbots-main.js"],
+      runAt: "document_start",
+      world: "MAIN",
+    }]).catch(() => {});
+    // Hook X tabs that are already open, so it works without a reload
+    // (it then sees new data as you scroll/navigate)
+    for (const tab of await chrome.tabs.query({ url: XBOTS_MATCHES })) {
+      chrome.scripting.executeScript({
+        target: { tabId: tab.id }, files: ["xbots-main.js"], world: "MAIN",
+      }).catch(() => {});
+    }
+  } else if (!enabled && existing.length > 0) {
+    await chrome.scripting.unregisterContentScripts({ ids: [XBOTS_SCRIPT_ID] }).catch(() => {});
+  }
+}
+
+function xbotsSync() {
+  xbotsSerial(xbotsSyncScript);
+  xbotsSerial(() => xbotsRefresh());
+}
+
+xbotsSync();
+chrome.runtime.onInstalled.addListener(xbotsSync);
+chrome.alarms.create("xbotsList", { periodInMinutes: 30 });   // checks; real fetch is gated to 6h
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "xbotsList") xbotsSerial(() => xbotsRefresh());
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.xbots_enabled) xbotsSync();
+});
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type !== "xbots_blocked" && msg.type !== "xbots_unblocked") return;
+  if (!/^\d{1,25}$/.test(String(msg.id))) return;
+  xbotsSerial(async () => {
+    const d = await chrome.storage.local.get(["xbots_blocked", "xbots_unblocked_count"]);
+    const blocked = d.xbots_blocked || {};
+    const update = {};
+    if (msg.type === "xbots_blocked") {
+      blocked[msg.id] = { name: String(msg.name || "").slice(0, 30), at: Date.now() };
+    } else if (blocked[msg.id]) {
+      delete blocked[msg.id];
+      update.xbots_unblocked_count = (d.xbots_unblocked_count || 0) + 1;
+    }
+    update.xbots_blocked = blocked;
+    await chrome.storage.local.set(update);
+  }).then(() => sendResponse({ ok: true }));
+  return true; // async sendResponse
+});

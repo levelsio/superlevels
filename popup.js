@@ -21,6 +21,7 @@ function switchToPage(page) {
     else if (page === "xunhook") loadXUnhook();
     else if (page === "xreply") loadXReply();
     else if (page === "xselect") loadXSelect();
+    else if (page === "xbots") loadXBots();
     else if (page === "photopea") loadPhotopea();
     else if (page === "tiktok") loadTikTok();
     else if (page === "archive") loadArchive();
@@ -1016,6 +1017,77 @@ xselectToggle.addEventListener("change", async () => {
   if (tab) {
     chrome.tabs.sendMessage(tab.id, { type: "xselect_toggle", enabled }).catch(() => {});
   }
+});
+
+// ═══════════════════════════════════
+//  X Bot Blocker (blockedforaireply.com)
+// ═══════════════════════════════════
+const xbotsToggle = document.getElementById("xbotsToggle");
+const xbotsStatus = document.getElementById("xbotsStatus");
+
+function xbotsAgo(ts) {
+  const min = Math.round((Date.now() - ts) / 60e3);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  if (min < 48 * 60) return `${Math.round(min / 60)}h ago`;
+  return `${Math.round(min / 1440)}d ago`;
+}
+
+async function loadXBots() {
+  const d = await chrome.storage.local.get([
+    "xbots_enabled", "xbots_ids", "xbots_removed", "xbots_updated_at", "xbots_error",
+    "xbots_blocked", "xbots_unblocked_count",
+  ]);
+  const enabled = d.xbots_enabled === true;
+  xbotsToggle.checked = enabled;
+  updateXBotsUI(enabled);
+
+  const listEl = document.getElementById("xbotsList");
+  if (d.xbots_ids?.length) {
+    listEl.textContent = `List: ${d.xbots_ids.length.toLocaleString()} accounts` +
+      (d.xbots_updated_at ? `, updated ${xbotsAgo(d.xbots_updated_at)}` : "") +
+      (d.xbots_error ? ` (last refresh failed: ${d.xbots_error})` : "");
+  } else {
+    listEl.textContent = d.xbots_error ? `List failed to load: ${d.xbots_error}`
+      : enabled ? "List: loading…" : "List: loads when you turn this on";
+  }
+
+  const blocked = Object.entries(d.xbots_blocked || {});
+  document.getElementById("xbotsCount").textContent =
+    `Blocked by SuperLevels: ${blocked.length.toLocaleString()}` +
+    (d.xbots_unblocked_count ? `, unblocked after appeal: ${d.xbots_unblocked_count}` : "");
+
+  const recent = document.getElementById("xbotsRecent");
+  recent.textContent = "";
+  blocked.sort((a, b) => b[1].at - a[1].at);
+  for (const [id, info] of blocked.slice(0, 8)) {
+    const row = document.createElement("div");
+    const a = document.createElement("a");
+    a.href = info.name ? `https://x.com/${info.name}` : `https://x.com/i/user/${id}`;
+    a.target = "_blank";
+    a.style.color = "#1d9bf0";
+    a.textContent = info.name ? "@" + info.name : id;
+    row.append(a, ` · ${xbotsAgo(info.at)}`);
+    recent.appendChild(row);
+  }
+}
+
+function updateXBotsUI(on) {
+  xbotsStatus.textContent = on ? "ON" : "OFF";
+  xbotsStatus.className = "status " + (on ? "on" : "off");
+}
+
+xbotsToggle.addEventListener("change", async () => {
+  const enabled = xbotsToggle.checked;
+  updateXBotsUI(enabled);
+  await chrome.storage.local.set({ xbots_enabled: enabled });
+  // background.js fetches the list on enable; show the result when it lands
+  setTimeout(loadXBots, 1500);
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local" || !document.getElementById("page-xbots").classList.contains("active")) return;
+  if (changes.xbots_blocked || changes.xbots_ids || changes.xbots_error) loadXBots();
 });
 
 // ═══════════════════════════════════

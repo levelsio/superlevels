@@ -762,6 +762,7 @@
     <button data-page="xunhook">𝕏 Unhook</button>
     <button data-page="xreply">𝕏 Reply</button>
     <button data-page="xselect">𝕏 Select</button>
+    <button data-page="xbots">🤖 Bots</button>
     <button data-page="photopea">🫛 Photopea</button>
     <button data-page="tiktok">🎶 TikTok</button>
     <button data-page="archive">🗄 No paywall</button>
@@ -1058,6 +1059,39 @@
       <div class="xdim-note" style="margin-top:10px">
         Batch-clean spam replies under your posts.<br>
         Hide only works on replies to your own posts.
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ X Bot Blocker Page ═══ -->
+  <div class="page" id="page-xbots">
+    <div class="page-body">
+      <div class="unhook-big-toggle">
+        <div class="yticon">🤖</div>
+        <label class="big-switch">
+          <input type="checkbox" id="xbotsToggle">
+          <span class="big-slider"></span>
+        </label>
+        <div class="status off" id="xbotsStatus">OFF</div>
+      </div>
+
+      <div class="unhook-features">
+        <div class="unhook-feature"><span class="check">✓</span> Auto-blocks AI reply bots from <a href="https://blockedforaireply.com" target="_blank" style="color:#1d9bf0;">blockedforaireply.com</a></div>
+        <div class="unhook-feature"><span class="check">✓</span> Only the ones you come across on X, as you browse</div>
+        <div class="unhook-feature"><span class="check">✓</span> Never blocks you or accounts you follow</div>
+        <div class="unhook-feature"><span class="check">✓</span> Unblocks accounts removed after appeal, if SuperLevels blocked them</div>
+        <div class="unhook-feature"><span class="check">✓</span> List refreshes every 6 hours</div>
+      </div>
+
+      <div class="dark-section" style="margin-top:10px;font-size:12px;color:#aaa;line-height:1.6;">
+        <div id="xbotsList">List: not loaded yet</div>
+        <div id="xbotsCount">Blocked by SuperLevels: 0</div>
+        <div id="xbotsRecent" style="margin-top:6px;"></div>
+      </div>
+
+      <div class="xdim-note" style="margin-top:10px">
+        Blocks use your logged-in X session, one account every ~1.5s.<br>
+        Flags on the list are judgment calls, not proof.
       </div>
     </div>
   </div>
