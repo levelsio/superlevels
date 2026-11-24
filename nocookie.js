@@ -5,7 +5,12 @@
 (() => {
   const STYLE_ID = "sl-nocookie";
 
+  // The hide list is wrapped in :is(...):not(html, body) because the
+  // substring selectors below ([class*="cookie-banner"] etc.) also match
+  // state classes that sites put on the root elements, e.g.
+  // <body class="has-cookie-banner">, which would hide the whole page.
   const HIDE_CSS = `
+    :is(
     #cookie-banner, #cookie-notice, #cookie-consent, #cookie-popup,
     #cookiebanner, #cookienotice, #cookieconsent, #cookiepopup,
     #cookie_banner, #cookie_notice, #cookie_consent, #cookie_popup,
@@ -46,7 +51,8 @@
     .termly-consent-banner, #termly-code-snippet-support,
     .CybotCookiebotDialog, #CybotCookiebotDialog,
     #CybotCookiebotDialogBodyUnderlay,
-    .cmplz-cookiebanner, #cmplz-cookiebanner-container {
+    .cmplz-cookiebanner, #cmplz-cookiebanner-container
+    ):not(html, body) {
       display: none !important;
       visibility: hidden !important;
       height: 0 !important;
