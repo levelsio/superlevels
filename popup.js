@@ -1565,6 +1565,7 @@ summarizeBtn.addEventListener("click", async () => {
   }
 
   summarizeBtn.disabled = true;
+  resetAiThread();
   showAiResult(`<span class="ai-spin">Reading page…</span>`);
 
   try {
@@ -1588,6 +1589,15 @@ summarizeBtn.addEventListener("click", async () => {
 
     const summary = await callAiProvider(provider, model, key, system, user);
     renderSummary(summary);
+    // Keep the conversation so follow-up questions can be asked about the same page
+    aiThread = {
+      provider, model, key,
+      messages: [
+        { role: "user", content: user },
+        { role: "assistant", content: summary },
+      ],
+    };
+    document.getElementById("aiAsk").classList.add("show");
     chrome.storage.local.set({ ai_length: aiLengthEl.value });
   } catch (err) {
     showAiResult(esc(err.message || "Something went wrong."), "err");
@@ -1596,7 +1606,13 @@ summarizeBtn.addEventListener("click", async () => {
   }
 });
 
-// Dispatch to the right provider API. Returns the summary text.
+// `user` is either one prompt string or a whole conversation: [{ role, content }, ...]
+function toMessages(user) {
+  return Array.isArray(user) ? user : [{ role: "user", content: user }];
+}
+
+// Dispatch to the right provider API. Returns the reply text. `user` is a prompt string or a
+// list of messages (see toMessages).
 async function callAiProvider(provider, model, key, system, user) {
   let url, headers, body, pick;
 
@@ -1613,7 +1629,7 @@ async function callAiProvider(provider, model, key, system, user) {
       model,
       max_tokens: 1024,
       system,
-      messages: [{ role: "user", content: user }],
+      messages: toMessages(user),
     };
     pick = (d) => (d.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
   } else {
@@ -1625,10 +1641,7 @@ async function callAiProvider(provider, model, key, system, user) {
     headers = { "content-type": "application/json", Authorization: `Bearer ${key}` };
     body = {
       model,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
+      messages: [{ role: "system", content: system }, ...toMessages(user)],
     };
     pick = (d) => d.choices?.[0]?.message?.content || "";
   }
@@ -1644,8 +1657,75 @@ async function callAiProvider(provider, model, key, system, user) {
   return text.trim();
 }
 
-// Minimal safe markdown: escape, then **bold**, and '- ' bullet lists
+// ── Ask about this page ──
+// After a summary, questions go to the same provider with the page text, the summary and
+// earlier questions and answers, so follow-ups ("and the return window?") make sense.
+// The conversation lives only while the popup is open.
+const ASK_SYSTEM =
+  "You are a helpful assistant answering questions about a web page the user is reading. " +
+  "Answer from the page content. If the page doesn't contain the answer, say so plainly. " +
+  "Be concise. Use plain text with '- ' for bullet points.";
+let aiThread = null;
+const aiQuestionEl = document.getElementById("aiQuestion");
+const aiAskBtn = document.getElementById("aiAskBtn");
+const aiThreadEl = document.getElementById("aiThread");
+
+function resetAiThread() {
+  aiThread = null;
+  aiThreadEl.innerHTML = "";
+  aiQuestionEl.value = "";
+  document.getElementById("aiAsk").classList.remove("show");
+}
+
+async function askAboutPage() {
+  const question = aiQuestionEl.value.trim();
+  if (!question || !aiThread || aiAskBtn.disabled) return;
+  const { provider, model, key, messages } = aiThread;
+
+  const block = document.createElement("div");
+  block.className = "ai-result show";
+  block.innerHTML = `<div class="ai-q">${esc(question)}</div><div class="ai-a"><span class="ai-spin">Thinking…</span></div>`;
+  aiThreadEl.appendChild(block);
+  const answerEl = block.querySelector(".ai-a");
+  block.scrollIntoView({ block: "nearest" });
+  aiQuestionEl.value = "";
+  aiAskBtn.disabled = true;
+  aiQuestionEl.disabled = true;
+
+  const asked = [...messages, { role: "user", content: question }];
+  try {
+    const answer = await callAiProvider(provider, model, key, ASK_SYSTEM, asked);
+    answerEl.innerHTML = mdToHtml(answer);
+    messages.push({ role: "user", content: question }, { role: "assistant", content: answer });
+  } catch (err) {
+    answerEl.innerHTML = `<span class="ai-err">${esc(err.message || "Something went wrong.")}</span>`;
+  } finally {
+    aiAskBtn.disabled = false;
+    aiQuestionEl.disabled = false;
+    aiQuestionEl.focus();
+  }
+}
+
+aiAskBtn.addEventListener("click", askAboutPage);
+aiQuestionEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") askAboutPage();
+});
+
+// Show the summary with a Copy button
 function renderSummary(text) {
+  const html = mdToHtml(text);
+  showAiResult(`<button class="ai-copy" id="aiCopyBtn">Copy</button>${html}`);
+  document.getElementById("aiCopyBtn").addEventListener("click", () => {
+    navigator.clipboard.writeText(text).then(() => {
+      const b = document.getElementById("aiCopyBtn");
+      b.textContent = "Copied!";
+      setTimeout(() => (b.textContent = "Copy"), 1500);
+    });
+  });
+}
+
+// Minimal safe markdown: escape, then **bold**, and '- ' bullet lists
+function mdToHtml(text) {
   const lines = text.split("\n");
   let html = "";
   let inList = false;
@@ -1661,14 +1741,7 @@ function renderSummary(text) {
     }
   }
   if (inList) html += "</ul>";
-  showAiResult(`<button class="ai-copy" id="aiCopyBtn">Copy</button>${html}`);
-  document.getElementById("aiCopyBtn").addEventListener("click", () => {
-    navigator.clipboard.writeText(text).then(() => {
-      const b = document.getElementById("aiCopyBtn");
-      b.textContent = "Copied!";
-      setTimeout(() => (b.textContent = "Copy"), 1500);
-    });
-  });
+  return html;
 }
 
 function fmtInline(s) {

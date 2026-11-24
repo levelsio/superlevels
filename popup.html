@@ -369,6 +369,15 @@
       font-size: 11px; cursor: pointer; margin: -4px -4px 0 0;
     }
     .ai-result .ai-spin { color: #888; }
+    .ai-ask { display: none; margin-top: 8px; }
+    .ai-ask.show { display: block; }
+    .ai-ask .ai-result { margin-bottom: 6px; }
+    .ai-ask .ai-q { color: #e94560; font-weight: 600; margin-bottom: 4px; }
+    .ai-ask-row { display: flex; gap: 6px; }
+    .ai-ask-row input {
+      flex: 1; padding: 6px 8px; background: #0f1e3d; border: 1px solid #2a2a4a;
+      border-radius: 4px; color: #ddd; font-size: 12px;
+    }
     .dark-scope {
       display: flex; gap: 6px; margin-bottom: 10px;
     }
@@ -1274,6 +1283,14 @@
       </div>
 
       <div class="ai-result" id="aiResult"></div>
+
+      <div class="ai-ask" id="aiAsk">
+        <div id="aiThread"></div>
+        <div class="ai-ask-row">
+          <input type="text" id="aiQuestion" placeholder="Ask a question about this page…">
+          <button class="btn-save" id="aiAskBtn" style="padding:6px 12px;font-size:12px;">Ask</button>
+        </div>
+      </div>
 
       <button id="aiSettingsBtn" style="background:none;border:none;color:#555;font-size:12px;cursor:pointer;margin-top:6px;">⚙️ API key & model</button>
       <div class="dark-section" id="aiConfig" style="margin-top:8px;display:none">
